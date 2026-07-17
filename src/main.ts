@@ -1,0 +1,10 @@
+import * as THREE from 'three';
+import { DefaultMediaManager } from './media/mediaManager';
+import { EnvironmentView } from './scene/environment';
+import { RoomView } from './scene/room';
+import { createStore, initialState } from './state/store';
+import { createPanel } from './ui/panel';
+import { createViewControls } from './ui/viewControls';
+import { setupXrControllers } from './xr/controllers';
+import { setupXrSession } from './xr/session';
+const app=document.querySelector('#app')!;const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.setClearColor(0x0a0e14);app.append(renderer.domElement);const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,.01,100),store=createStore(initialState),media=new DefaultMediaManager(),room=new RoomView(scene,media),environment=new EnvironmentView(scene),view=createViewControls(camera,renderer.domElement,store),disposeXr=setupXrSession(renderer,store,media,view.controls),xrControllers=setupXrControllers(renderer,store,media);const allChanged=new Set(Object.keys(initialState)as(keyof typeof initialState)[]);media.applyState(initialState);room.update(initialState,allChanged);environment.update(initialState);const unsubscribe=store.subscribe((state,changed)=>{media.applyState(state);room.update(state,changed);if(changed.has('params')||changed.has('showPeople'))environment.update(state);}),disposePanel=createPanel(document.querySelector('#ui')!,store,media);function resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}addEventListener('resize',resize);renderer.setAnimationLoop(()=>{xrControllers.update();view.controls.update();renderer.render(scene,camera)});addEventListener('beforeunload',()=>{renderer.setAnimationLoop(null);unsubscribe();disposePanel();xrControllers.dispose();disposeXr();view.dispose();room.dispose();environment.dispose();media.dispose();renderer.dispose();});

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>3面モニター シミュレーター</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0a0e14; color:#dce8ef; font-family:"Yu Gothic UI","Meiryo",sans-serif; overflow:hidden; }
+  #ui {
+    position:fixed; top:0; left:0; right:0; z-index:10;
+    display:flex; gap:14px; align-items:center; flex-wrap:wrap;
+    padding:10px 14px; background:rgba(8,12,18,.85); backdrop-filter:blur(6px);
+    border-bottom:1px solid #1c2a38; font-size:12px;
+  }
+  #ui label { display:flex; align-items:center; gap:5px; cursor:pointer;
+    background:#15222f; border:1px solid #27394a; padding:5px 10px; border-radius:6px; }
+  #ui label:hover { background:#1c2e3f; }
+  #ui input[type=file] { display:none; }
+  #ui button { background:#2596ad; color:#fff; border:none; padding:6px 16px;
+    border-radius:6px; cursor:pointer; font-size:12px; }
+  #ui button:hover { background:#2fb3cc; }
+  #ui button.secondary { background:#33465a; }
+  .slider-group { display:flex; align-items:center; gap:5px; }
+  .slider-group input { width:90px; }
+  #mode-toggle { display:flex; align-items:center; gap:4px; }
+  #seek { flex:1; min-width:120px; }
+  #scene-wrap { position:fixed; inset:0; display:flex; align-items:center;
+    justify-content:center; perspective:1400px; perspective-origin:50% 42%; }
+  #room { position:relative; width:800px; height:360px;
+    transform-style:preserve-3d; }
+  .screen { position:absolute; overflow:hidden; background:#000;
+    box-shadow:0 0 40px rgba(60,160,200,.25); transform-style:preserve-3d; }
+  .screen video { position:absolute; top:0; left:0; height:100%; object-fit:fill; }
+  .screen .placeholder { position:absolute; inset:0; display:flex; align-items:center;
+    justify-content:center; color:#3d566b; font-size:14px; letter-spacing:.2em;
+    background:linear-gradient(160deg,#0b1926,#081019); }
+  /* 正面 20:9 → 800x360、部屋の奥 z=-560 */
+  #front { width:800px; height:360px; left:0; top:0;
+    transform: translateZ(-560px); }
+  /* 側面 14:9 → 560x360。正面の右端(x=800, z=-560)から手前に伸びる。内側(-x)を向く */
+  #side { width:560px; height:360px; left:800px; top:0;
+    transform: translateZ(-560px) rotateY(-90deg); transform-origin:left center; }
+  /* 床面 6000x4187.5mm ≈ 800x560。壁の足元(y=360, z=-560)から手前へ。上を向く */
+  #floor { width:800px; height:560px; left:0; top:360px;
+    transform: translateZ(-560px) rotateX(90deg); transform-origin:top center; }
+  /* 環境の床 */
+  #ground { position:absolute; width:2400px; height:1600px; top:360px; left:-800px;
+    transform: translateZ(-560px) rotateX(90deg); transform-origin:top center;
+    background:radial-gradient(ellipse at 33% 18%, #182530 0%, #0b1218 55%, #070b10 100%);
+    z-index:-1; }
+  .silhouette { position:absolute; bottom:0; width:26px; opacity:.85; }
+  .silhouette .body { position:absolute; bottom:0; left:2px; right:2px; top:24px;
+    background:#05080c; border-radius:10px 10px 3px 3px; }
+  .silhouette .head { position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:18px; height:18px; border-radius:50%; background:#05080c; }
+  .silhouette.hidden { display:none; }
+  #hint { position:fixed; bottom:12px; left:14px; font-size:11px; color:#51697c; z-index:10; }
+  body.presentation #ui, body.presentation #hint { display:none; }
+  body.presentation { background:#000; }
+  body.presentation #ground { background:#000 !important; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="mode-toggle">
+    <input type="radio" name="mode" id="mode-sep" checked><label for="mode-sep" style="border:none;background:none;padding:0">壁面 個別</label>
+    <input type="radio" name="mode" id="mode-span"><label for="mode-span" style="border:none;background:none;padding:0">壁面 連続(34:9を1本)</label>
+  </div>
+  <label id="lbl-front">正面 20:9 <input type="file" id="file-front" accept="video/*"></label>
+  <label id="lbl-side">側面 14:9 <input type="file" id="file-side" accept="video/*"></label>
+  <label id="lbl-span" style="display:none">壁面 34:9 <input type="file" id="file-span" accept="video/*"></label>
+  <label>床面 <input type="file" id="file-floor" accept="video/*"></label>
+  <button id="play">▶ 再生</button>
+  <button id="restart" class="secondary">⏮ 先頭へ</button>
+  <input type="range" id="seek" min="0" max="1000" value="0">
+  <div class="slider-group">視点<input type="range" id="orbit" min="-40" max="40" value="18"></div>
+  <div class="slider-group">高さ<input type="range" id="pitch" min="0" max="90" value="14"></div>
+  <div class="slider-group">距離<input type="range" id="dist" min="60" max="140" value="100"></div>
+  <label style="border:none;background:none;padding:0"><input type="checkbox" id="show-people" checked> 人物表示</label>
+  <button id="pres" class="secondary">🖥 プレゼンモード</button>
+</div>
+
+<div id="scene-wrap">
+  <div id="room">
+    <div id="ground"></div>
+    <div class="screen" id="front"><div class="placeholder">正面 20:9</div></div>
+    <div class="screen" id="side"><div class="placeholder">側面 14:9</div></div>
+    <div class="screen" id="floor"><div class="placeholder">床面 6.0m × 4.19m</div></div>
+  </div>
+</div>
+<div id="hint">動画を読み込んで「再生」ですべての面が同期再生されます。連続モードでは34:9の1本が正面(左20/34)と側面(右14/34)に自動分割されます。ドラッグでも視点を回せます。</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const room = $('room');
+let videos = { front:null, side:null, floor:null, span1:null, span2:null };
+let playing = false;
+let spanMode = false;
+
+function makeVideo(file){
+  const v = document.createElement('video');
+  v.src = URL.createObjectURL(file);
+  v.loop = true; v.muted = true; v.playsInline = true; v.preload = 'auto';
+  return v;
+}
+function setScreen(id, video, widthPct, leftPct){
+  const scr = $(id);
+  scr.querySelectorAll('video').forEach(e=>e.remove());
+  const ph = scr.querySelector('.placeholder');
+  if (ph) ph.style.display = 'none';
+  video.style.width = (widthPct||100)+'%';
+  video.style.left = (leftPct||0)+'%';
+  scr.appendChild(video);
+}
+$('file-front').onchange = e => { if(!e.target.files[0])return;
+  videos.front = makeVideo(e.target.files[0]); setScreen('front', videos.front); };
+$('file-side').onchange = e => { if(!e.target.files[0])return;
+  videos.side = makeVideo(e.target.files[0]); setScreen('side', videos.side); };
+$('file-floor').onchange = e => { if(!e.target.files[0])return;
+  videos.floor = makeVideo(e.target.files[0]); setScreen('floor', videos.floor); };
+$('file-span').onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  // 34:9 の1本を 正面(左20/34) と 側面(右14/34) に分割表示
+  videos.span1 = makeVideo(f); videos.span2 = makeVideo(f);
+  // 正面: コンテナ幅=20単位。動画全幅=34単位 → 34/20*100%
+  setScreen('front', videos.span1, 34/20*100, 0);
+  // 側面: コンテナ幅=14単位。左に20単位ずらす → left = -20/14*100%
+  setScreen('side', videos.span2, 34/14*100, -(20/14*100));
+};
+$('mode-sep').onchange = $('mode-span').onchange = () => {
+  spanMode = $('mode-span').checked;
+  $('lbl-front').style.display = spanMode?'none':'flex';
+  $('lbl-side').style.display  = spanMode?'none':'flex';
+  $('lbl-span').style.display  = spanMode?'flex':'none';
+};
+function activeVideos(){
+  const list = [];
+  if (spanMode) { if(videos.span1) list.push(videos.span1, videos.span2); }
+  else { if(videos.front) list.push(videos.front); if(videos.side) list.push(videos.side); }
+  if (videos.floor) list.push(videos.floor);
+  return list;
+}
+$('play').onclick = () => {
+  const vs = activeVideos(); if(!vs.length) return;
+  playing = !playing;
+  $('play').textContent = playing ? '⏸ 停止' : '▶ 再生';
+  vs.forEach(v => playing ? v.play() : v.pause());
+};
+$('restart').onclick = () => activeVideos().forEach(v => v.currentTime = 0);
+$('seek').oninput = e => {
+  const vs = activeVideos(); if(!vs.length) return;
+  const t = e.target.value/1000 * (vs[0].duration||0);
+  vs.forEach(v => v.currentTime = t);
+};
+setInterval(() => { // 同期補正 & シークバー追従
+  const vs = activeVideos(); if(vs.length<2) { if(vs.length===1 && vs[0].duration) $('seek').value = vs[0].currentTime/vs[0].duration*1000; return; }
+  const master = vs[0];
+  if (master.duration) $('seek').value = master.currentTime/master.duration*1000;
+  for (let i=1;i<vs.length;i++)
+    if (Math.abs(vs[i].currentTime - master.currentTime) > 0.08)
+      vs[i].currentTime = master.currentTime;
+}, 500);
+
+// ---- 視点操作 ----
+function applyView(){
+  const y = +$('orbit').value, x = +$('pitch').value, d = +$('dist').value/100;
+  room.style.transform = `scale(${d}) rotateX(${-x}deg) rotateY(${y}deg)`;
+}
+['orbit','pitch','dist'].forEach(id => $(id).oninput = applyView);
+let drag = null;
+document.addEventListener('mousedown', e => { if(e.target.closest('#ui'))return; drag={x:e.clientX,y:e.clientY,o:+$('orbit').value,p:+$('pitch').value}; });
+document.addEventListener('mousemove', e => { if(!drag)return;
+  $('orbit').value = Math.max(-40,Math.min(40, drag.o + (e.clientX-drag.x)/8));
+  $('pitch').value = Math.max(0,Math.min(90, drag.p - (e.clientY-drag.y)/10));
+  applyView(); });
+document.addEventListener('mouseup', ()=> drag=null);
+applyView();
+
+// 人のシルエット(スケール感)身長170cm ≈ 高さ2.7m壁 → 360px*(1.7/2.7)=227px
+let presMode = false;
+function togglePres(on) {
+  presMode = on;
+  document.body.classList.toggle('presentation', on);
+  if (on && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+  if (!on && document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+}
+$('pres').onclick = () => togglePres(true);
+addEventListener('keydown', e => {
+  if (e.key === 'Escape' && presMode) togglePres(false);
+  if ((e.key === 'h' || e.key === 'H') && presMode) togglePres(false);
+});
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && presMode) togglePres(false); });
+
+// 大人170cm≈226px / 子供105cm≈140px(壁高2.7m=360px基準)
+[[250,226,-90,18,26],[290,140,-85,15,20],[540,226,-170,18,26],[690,215,-60,18,26],[650,128,-70,14,18]].forEach(([lx,h,z,head,w])=>{
+  const s = document.createElement('div');
+  s.className='silhouette'; s.style.left=lx+'px'; s.style.height=h+'px'; s.style.width=w+'px';
+  s.style.transform=`translateZ(${z}px)`;
+  s.innerHTML = `<div class="head" style="width:${head}px;height:${head}px"></div><div class="body" style="top:${head+4}px"></div>`;
+  room.appendChild(s);
+});
+$('show-people').onchange = e =>
+  document.querySelectorAll('.silhouette').forEach(s => s.classList.toggle('hidden', !e.target.checked));
+</script>
+</body>
+</html>

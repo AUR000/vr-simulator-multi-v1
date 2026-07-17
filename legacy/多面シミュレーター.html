@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>多面モニター シミュレーター</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0a0e14; color:#dce8ef; font-family:"Yu Gothic UI","Meiryo",sans-serif; overflow:hidden; }
+  #ui {
+    position:fixed; top:0; left:0; right:0; z-index:10;
+    display:flex; flex-direction:column; gap:8px;
+    padding:10px 14px; background:rgba(8,12,18,.9); backdrop-filter:blur(6px);
+    border-bottom:1px solid #1c2a38; font-size:12px;
+  }
+  #ui-row1, #ui-row2 {
+    display:flex; gap:12px; align-items:center; flex-wrap:wrap;
+  }
+  #ui label { display:flex; align-items:center; gap:5px; cursor:pointer;
+    background:#15222f; border:1px solid #27394a; padding:5px 10px; border-radius:6px; }
+  #ui label:hover { background:#1c2e3f; }
+  #ui label.plain { border:none; background:none; padding:0; }
+  #ui label.plain:hover { background:none; }
+  #ui input[type=file] { display:none; }
+  #ui input[type=number] {
+    width:72px; background:#0d1620; color:#dce8ef; border:1px solid #27394a;
+    border-radius:4px; padding:3px 6px; font-size:12px;
+  }
+  #ui select {
+    background:#15222f; color:#dce8ef; border:1px solid #27394a;
+    border-radius:6px; padding:5px 8px; font-size:12px;
+  }
+  #ui button { background:#2596ad; color:#fff; border:none; padding:6px 16px;
+    border-radius:6px; cursor:pointer; font-size:12px; }
+  #ui button:hover { background:#2fb3cc; }
+  #ui button.secondary { background:#33465a; }
+  .slider-group { display:flex; align-items:center; gap:5px; }
+  .slider-group input { width:90px; }
+  #mode-toggle { display:flex; align-items:center; gap:4px; }
+  #seek { flex:1; min-width:120px; }
+  #file-slots { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  #aspect-info {
+    color:#7a9bb0; font-size:11px; letter-spacing:.02em;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;
+  }
+  #param-group {
+    display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    padding:4px 0;
+  }
+  #param-group .num-field { display:flex; align-items:center; gap:4px; }
+  #face-toggles { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  #scene-wrap { position:fixed; inset:0; display:flex; align-items:center;
+    justify-content:center; perspective:1400px; perspective-origin:50% 42%; }
+  #room { position:relative;
+    transform-style:preserve-3d; }
+  .screen { position:absolute; overflow:hidden; background:#000;
+    box-shadow:0 0 40px rgba(60,160,200,.25); transform-style:preserve-3d; }
+  .screen video { position:absolute; top:0; left:0; height:100%; object-fit:fill; }
+  .screen .placeholder { position:absolute; inset:0; display:flex; align-items:center;
+    justify-content:center; color:#3d566b; font-size:14px; letter-spacing:.2em;
+    background:linear-gradient(160deg,#0b1926,#081019); }
+  /* 天井は rotateX(-90deg) 後に裏面が見えるため、内容を左右反転して内側から正しく読めるようにする */
+  .screen[data-face="ceiling"] video,
+  .screen[data-face="ceiling"] .placeholder { transform: scaleX(-1); }
+  #ground { position:absolute;
+    background:radial-gradient(ellipse at 33% 18%, #182530 0%, #0b1218 55%, #070b10 100%);
+    z-index:-1; transform-style:preserve-3d; }
+  .silhouette { position:absolute; bottom:0; width:26px; opacity:.85; transform-style:preserve-3d; }
+  .silhouette .body { position:absolute; bottom:0; left:2px; right:2px; top:24px;
+    background:#05080c; border-radius:10px 10px 3px 3px; }
+  .silhouette .head { position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:18px; height:18px; border-radius:50%; background:#05080c; }
+  .silhouette.hidden { display:none; }
+  #hint { position:fixed; bottom:12px; left:14px; right:14px; font-size:11px; color:#51697c; z-index:10; }
+  body.presentation #ui, body.presentation #hint { display:none; }
+  body.presentation { background:#000; }
+  body.presentation #ground { background:#000 !important; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="ui-row1">
+    <div id="mode-toggle">
+      <input type="radio" name="mode" id="mode-sep" checked><label for="mode-sep" class="plain">壁面 個別</label>
+      <input type="radio" name="mode" id="mode-span"><label for="mode-span" class="plain">壁面 連続</label>
+    </div>
+    <div id="file-slots"></div>
+    <button id="play">▶ 再生</button>
+    <button id="restart" class="secondary">⏮ 先頭へ</button>
+    <input type="range" id="seek" min="0" max="1000" value="0">
+    <div class="slider-group">視点<input type="range" id="orbit" min="-40" max="40" value="18"></div>
+    <div class="slider-group">高さ<input type="range" id="pitch" min="0" max="90" value="14"></div>
+    <div class="slider-group">距離<input type="range" id="dist" min="60" max="140" value="100"></div>
+    <label class="plain"><input type="checkbox" id="show-people" checked> 人物表示</label>
+    <label class="plain"><input type="checkbox" id="mute" checked> ミュート</label>
+    <button id="pres" class="secondary">🖥 プレゼンモード</button>
+  </div>
+  <div id="ui-row2">
+    <div id="param-group">
+      <label class="plain">プリセット
+        <select id="preset">
+          <option value="aquarium">3面</option>
+          <option value="u">コの字</option>
+          <option value="l">L字(正面+右)</option>
+          <option value="box">ボックス(5面)</option>
+          <option value="custom">カスタム</option>
+        </select>
+      </label>
+      <span class="num-field">幅W(mm)<input type="number" id="param-w" min="100" step="1" value="6000"></span>
+      <span class="num-field">高さH(mm)<input type="number" id="param-h" min="100" step="1" value="2700"></span>
+      <span class="num-field">奥行D(mm)<input type="number" id="param-d" min="100" step="0.1" value="4187.5"></span>
+      <div id="face-toggles">
+        <label class="plain"><input type="checkbox" id="face-left"> 左側面</label>
+        <label class="plain"><input type="checkbox" id="face-right" checked> 右側面</label>
+        <label class="plain"><input type="checkbox" id="face-floor" checked> 床面</label>
+        <label class="plain"><input type="checkbox" id="face-ceiling"> 天井面</label>
+      </div>
+    </div>
+    <div id="aspect-info"></div>
+  </div>
+</div>
+
+<div id="scene-wrap">
+  <div id="room"></div>
+</div>
+<div id="hint">動画を読み込んで「再生」ですべての面が同期再生されます。連続モードではONの壁面(左→正面→右)を1本の横長動画として分割表示します。パラメータでW/H/Dと面のON/OFFを変更できます。ドラッグでも視点を回せます。Esc/Hでプレゼン解除。</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const MM_PER_PX = 7.5;
+const FACE_KEYS = ['front', 'left', 'right', 'floor', 'ceiling'];
+const FACE_LABELS = {
+  front: '正面', left: '左側面', right: '右側面', floor: '床面', ceiling: '天井面'
+};
+const COMMON_RATIOS = [
+  [16, 9], [20, 9], [21, 9], [14, 9], [4, 3], [1, 1], [2, 1]
+];
+
+const PRESETS = {
+  aquarium: { W: 6000, H: 2700, D: 4187.5, left: false, right: true, floor: true, ceiling: false },
+  u:        { W: 6000, H: 2700, D: 3000,   left: true,  right: true, floor: false, ceiling: false },
+  l:        { W: 6000, H: 2700, D: 4000,   left: false, right: true, floor: false, ceiling: false },
+  box:      { W: 6000, H: 2700, D: 4000,   left: true,  right: true, floor: true,  ceiling: true  }
+};
+
+const room = $('room');
+/** @type {Record<string, HTMLVideoElement|null>} */
+const videos = {
+  front: null, left: null, right: null, floor: null, ceiling: null,
+  span: null // source file video instances kept separately as array via spanVideos
+};
+/** span mode: one video element per active wall face, keyed by face */
+let spanVideos = { left: null, front: null, right: null };
+let playing = false;
+let spanMode = false;
+let applyingPreset = false;
+
+function makeVideo(fileOrSrc) {
+  const v = document.createElement('video');
+  if (typeof fileOrSrc === 'string') {
+    v.src = fileOrSrc;
+  } else {
+    v.src = URL.createObjectURL(fileOrSrc);
+  }
+  v.loop = true;
+  v.muted = true;
+  v.playsInline = true;
+  v.preload = 'auto';
+  return v;
+}
+
+function cloneVideo(srcVideo) {
+  if (!srcVideo || !srcVideo.src) return null;
+  const v = makeVideo(srcVideo.src);
+  try {
+    if (srcVideo.currentTime) v.currentTime = srcVideo.currentTime;
+  } catch (_) {}
+  if (playing && !srcVideo.paused) {
+    v.play().catch(() => {});
+  }
+  return v;
+}
+
+/** 管理中の全 video 要素（非表示のものも含む） */
+function allManagedVideos() {
+  const list = [];
+  FACE_KEYS.forEach(k => { if (videos[k]) list.push(videos[k]); });
+  Object.keys(spanVideos).forEach(k => { if (spanVideos[k]) list.push(spanVideos[k]); });
+  return list;
+}
+
+/**
+ * 音声を出す代表動画。優先: 正面(front) > 側面(right) > 床(floor) > その他
+ * 連続モードでも分割元の代表1本のみ。
+ */
+function pickAudioSource() {
+  const p = getParams();
+  if (spanMode) {
+    if (spanVideos.front) return spanVideos.front;
+    if (p.right && spanVideos.right) return spanVideos.right;
+  } else {
+    if (videos.front) return videos.front;
+    if (p.right && videos.right) return videos.right;
+  }
+  if (p.floor && videos.floor) return videos.floor;
+  // その他: 左側面・天井・連続時の左など
+  if (spanMode) {
+    if (p.left && spanVideos.left) return spanVideos.left;
+  } else {
+    if (p.left && videos.left) return videos.left;
+  }
+  if (p.ceiling && videos.ceiling) return videos.ceiling;
+  return null;
+}
+
+/** ミュート状態を全 video に反映（代表1本だけ非ミュート、他は常にミュート） */
+function applyMuteState() {
+  const wantMute = $('mute').checked;
+  const src = pickAudioSource();
+  allManagedVideos().forEach(v => {
+    v.muted = wantMute || v !== src;
+  });
+}
+
+function clearScreenVideos(scr) {
+  if (!scr) return;
+  scr.querySelectorAll('video').forEach(e => {
+    if (e.parentNode) e.parentNode.removeChild(e);
+  });
+  const ph = scr.querySelector('.placeholder');
+  if (ph) ph.style.display = '';
+}
+
+function setScreenVideo(scr, video, widthPct, leftPct) {
+  if (!scr || !video) return;
+  scr.querySelectorAll('video').forEach(e => {
+    if (e !== video && e.parentNode) e.parentNode.removeChild(e);
+  });
+  const ph = scr.querySelector('.placeholder');
+  if (ph) ph.style.display = 'none';
+  video.style.width = (widthPct != null ? widthPct : 100) + '%';
+  video.style.left = (leftPct != null ? leftPct : 0) + '%';
+  video.style.top = '0';
+  video.style.height = '100%';
+  if (video.parentNode !== scr) scr.appendChild(video);
+}
+
+function getParams() {
+  return {
+    W: Math.max(100, +$('param-w').value || 100),
+    H: Math.max(100, +$('param-h').value || 100),
+    D: Math.max(100, +$('param-d').value || 100),
+    left: $('face-left').checked,
+    right: $('face-right').checked,
+    floor: $('face-floor').checked,
+    ceiling: $('face-ceiling').checked
+  };
+}
+
+function px(mm) { return mm / MM_PER_PX; }
+
+function formatAspect(widthMm, heightMm) {
+  if (!heightMm) return '—';
+  const r = widthMm / heightMm;
+  let nearest = null;
+  let best = Infinity;
+  for (const [a, b] of COMMON_RATIOS) {
+    const diff = Math.abs(r - a / b);
+    if (diff < best) { best = diff; nearest = a + ':' + b; }
+  }
+  // 近いとみなす閾値: 相対差 3% 以内
+  const note = best / r < 0.03 ? ' (' + nearest + ')' : '';
+  return r.toFixed(2) + note;
+}
+
+function updateAspectInfo(p) {
+  const parts = [];
+  parts.push('正面 ' + Math.round(p.W) + '×' + Math.round(p.H) + ' → ' + formatAspect(p.W, p.H));
+  if (p.left) parts.push('左 ' + formatAspect(p.D, p.H));
+  if (p.right) parts.push('右 ' + formatAspect(p.D, p.H));
+  if (p.floor) parts.push('床 ' + formatAspect(p.W, p.D));
+  if (p.ceiling) parts.push('天井 ' + formatAspect(p.W, p.D));
+  if (spanMode) {
+    const stripW = (p.left ? p.D : 0) + p.W + (p.right ? p.D : 0);
+    parts.push('連続ストリップ ' + Math.round(stripW) + '×' + Math.round(p.H) + ' → ' + formatAspect(stripW, p.H));
+  }
+  $('aspect-info').textContent = parts.join(' ｜ ');
+}
+
+function clearSilhouettes() {
+  room.querySelectorAll('.silhouette').forEach(s => s.remove());
+}
+
+function placeSilhouettes(w, h, d) {
+  clearSilhouettes();
+  // 身長はHに関係なく実寸固定 (mm → px) — SPEC: 1700/7.5, 1050/7.5, 1280/7.5
+  const adultH = 1700 / MM_PER_PX;
+  const childH1 = 1050 / MM_PER_PX;
+  const childH2 = 1280 / MM_PER_PX;
+  // 配置は部屋スケールに合わせて相対配置 (baseの水族館レイアウトを比率でマッピング)
+  const people = [
+    { lx: 0.3125 * w, h: adultH,  z: -0.16 * d, head: 18, width: 26 },
+    { lx: 0.3625 * w, h: childH1, z: -0.15 * d, head: 15, width: 20 },
+    { lx: 0.675  * w, h: adultH,  z: -0.30 * d, head: 18, width: 26 },
+    { lx: 0.8625 * w, h: adultH,  z: -0.11 * d, head: 18, width: 26 },
+    { lx: 0.8125 * w, h: childH2, z: -0.125 * d, head: 14, width: 18 }
+  ];
+  const show = $('show-people').checked;
+  people.forEach(p => {
+    const s = document.createElement('div');
+    s.className = 'silhouette' + (show ? '' : ' hidden');
+    s.style.left = p.lx + 'px';
+    s.style.height = p.h + 'px';
+    s.style.width = p.width + 'px';
+    // base 同様 bottom:0 を room 下端(=壁足元)に置く
+    s.style.bottom = '0';
+    s.style.transform = 'translateZ(' + p.z + 'px)';
+    s.innerHTML =
+      '<div class="head" style="width:' + p.head + 'px;height:' + p.head + 'px"></div>' +
+      '<div class="body" style="top:' + (p.head + 4) + 'px"></div>';
+    room.appendChild(s);
+  });
+}
+
+function createScreenEl(id, label) {
+  const el = document.createElement('div');
+  el.className = 'screen';
+  el.id = 'screen-' + id;
+  el.dataset.face = id;
+  const ph = document.createElement('div');
+  ph.className = 'placeholder';
+  ph.textContent = label;
+  el.appendChild(ph);
+  return el;
+}
+
+/**
+ * SPEC の 3D配置の数式どおりに各面を配置する。
+ * w = W/7.5, h = H/7.5, d = D/7.5
+ */
+function buildRoom() {
+  const p = getParams();
+  const w = px(p.W);
+  const h = px(p.H);
+  const d = px(p.D);
+
+  // 既存 video を DOM から一時退避(オブジェクト自体は videos / spanVideos に保持)
+  FACE_KEYS.forEach(k => {
+    const v = videos[k];
+    if (v && v.parentNode) v.parentNode.removeChild(v);
+  });
+  Object.keys(spanVideos).forEach(k => {
+    const v = spanVideos[k];
+    if (v && v.parentNode) v.parentNode.removeChild(v);
+  });
+
+  room.innerHTML = '';
+  room.style.width = w + 'px';
+  room.style.height = h + 'px';
+
+  // 環境床
+  const ground = document.createElement('div');
+  ground.id = 'ground';
+  // base: 2400x1600, left=-800, top=360, z=-560 → 部屋の約3倍幅・約2.85倍奥行
+  const gw = Math.max(w * 3, w + 2 * d);
+  const gd = Math.max(d * 2.85, d + 200);
+  ground.style.width = gw + 'px';
+  ground.style.height = gd + 'px';
+  ground.style.left = ((w - gw) / 2) + 'px';
+  ground.style.top = h + 'px';
+  ground.style.transform = 'translateZ(-' + d + 'px) rotateX(90deg)';
+  ground.style.transformOrigin = 'top center';
+  room.appendChild(ground);
+
+  // 正面 (常時)
+  {
+    const el = createScreenEl('front', '正面 ' + formatAspect(p.W, p.H));
+    el.style.width = w + 'px';
+    el.style.height = h + 'px';
+    el.style.left = '0';
+    el.style.top = '0';
+    el.style.transform = 'translateZ(-' + d + 'px)';
+    room.appendChild(el);
+  }
+
+  // 右側面
+  if (p.right) {
+    const el = createScreenEl('right', '右側面 ' + formatAspect(p.D, p.H));
+    el.style.width = d + 'px';
+    el.style.height = h + 'px';
+    el.style.left = w + 'px';
+    el.style.top = '0';
+    el.style.transform = 'translateZ(-' + d + 'px) rotateY(-90deg)';
+    el.style.transformOrigin = 'left center';
+    room.appendChild(el);
+  }
+
+  // 左側面
+  if (p.left) {
+    const el = createScreenEl('left', '左側面 ' + formatAspect(p.D, p.H));
+    el.style.width = d + 'px';
+    el.style.height = h + 'px';
+    el.style.left = (-d) + 'px';
+    el.style.top = '0';
+    el.style.transform = 'translateZ(-' + d + 'px) rotateY(90deg)';
+    el.style.transformOrigin = 'right center';
+    room.appendChild(el);
+  }
+
+  // 床面
+  if (p.floor) {
+    const el = createScreenEl('floor', '床面 ' + (p.W / 1000).toFixed(1) + 'm × ' + (p.D / 1000).toFixed(2) + 'm');
+    el.style.width = w + 'px';
+    el.style.height = d + 'px';
+    el.style.left = '0';
+    el.style.top = h + 'px';
+    el.style.transform = 'translateZ(-' + d + 'px) rotateX(90deg)';
+    el.style.transformOrigin = 'top center';
+    room.appendChild(el);
+  }
+
+  // 天井面
+  if (p.ceiling) {
+    const el = createScreenEl('ceiling', '天井面 ' + formatAspect(p.W, p.D));
+    el.style.width = w + 'px';
+    el.style.height = d + 'px';
+    el.style.left = '0';
+    el.style.top = (-d) + 'px';
+    el.style.transform = 'translateZ(-' + d + 'px) rotateX(-90deg)';
+    el.style.transformOrigin = 'bottom center';
+    room.appendChild(el);
+  }
+
+  placeSilhouettes(w, h, d);
+  reattachVideos(p);
+  updateAspectInfo(p);
+  updateFileSlots(p);
+  applyView();
+}
+
+function getScreen(face) {
+  return document.getElementById('screen-' + face);
+}
+
+/** 連続モードのクロップ計算: 左→正面→右の順 */
+function spanCrop(p, face) {
+  const leftW = p.left ? p.D : 0;
+  const frontW = p.W;
+  const rightW = p.right ? p.D : 0;
+  const total = leftW + frontW + rightW;
+  if (total <= 0) return { widthPct: 100, leftPct: 0 };
+
+  let own, leftOf;
+  if (face === 'left') {
+    own = leftW; leftOf = 0;
+  } else if (face === 'front') {
+    own = frontW; leftOf = leftW;
+  } else if (face === 'right') {
+    own = rightW; leftOf = leftW + frontW;
+  } else {
+    return { widthPct: 100, leftPct: 0 };
+  }
+  if (own <= 0) return { widthPct: 100, leftPct: 0 };
+  return {
+    widthPct: (total / own) * 100,
+    leftPct: -(leftOf / own) * 100
+  };
+}
+
+function reattachVideos(p) {
+  p = p || getParams();
+
+  // いったん全スクリーンの video を外し placeholder を戻す（モード切替の残留防止）
+  FACE_KEYS.forEach(face => clearScreenVideos(getScreen(face)));
+
+  if (spanMode) {
+    // 壁面は spanVideos をクロップ配置
+    const walls = [];
+    if (p.left) walls.push('left');
+    walls.push('front');
+    if (p.right) walls.push('right');
+
+    // span ソースがある場合、足りない壁分を複製
+    const anySpan = spanVideos.front || spanVideos.left || spanVideos.right;
+    const src = anySpan ? anySpan.src : null;
+    const masterTime = anySpan ? anySpan.currentTime : 0;
+
+    walls.forEach(face => {
+      if (!spanVideos[face] && src) {
+        spanVideos[face] = makeVideo(src);
+        try { if (masterTime) spanVideos[face].currentTime = masterTime; } catch (_) {}
+        if (playing) spanVideos[face].play().catch(() => {});
+      }
+      const scr = getScreen(face);
+      if (scr && spanVideos[face]) {
+        const crop = spanCrop(p, face);
+        setScreenVideo(scr, spanVideos[face], crop.widthPct, crop.leftPct);
+      }
+    });
+  } else {
+    // 個別モード: 壁面 + 全個別スロット
+    const wallFaces = ['front'];
+    if (p.left) wallFaces.push('left');
+    if (p.right) wallFaces.push('right');
+    wallFaces.forEach(face => {
+      const scr = getScreen(face);
+      if (scr && videos[face]) setScreenVideo(scr, videos[face], 100, 0);
+    });
+  }
+
+  // 床・天井は連続モードでも個別
+  if (p.floor && videos.floor) {
+    const scr = getScreen('floor');
+    if (scr) setScreenVideo(scr, videos.floor, 100, 0);
+  }
+  if (p.ceiling && videos.ceiling) {
+    const scr = getScreen('ceiling');
+    if (scr) setScreenVideo(scr, videos.ceiling, 100, 0);
+  }
+  applyMuteState();
+}
+
+function updateFileSlots(p) {
+  p = p || getParams();
+  const host = $('file-slots');
+  host.innerHTML = '';
+
+  function addFileLabel(id, text, onChange) {
+    const lab = document.createElement('label');
+    lab.id = 'lbl-' + id;
+    lab.textContent = text + ' ';
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'video/*';
+    inp.id = 'file-' + id;
+    inp.onchange = onChange;
+    lab.appendChild(inp);
+    host.appendChild(lab);
+    return lab;
+  }
+
+  if (spanMode) {
+    const walls = [];
+    if (p.left) walls.push('左');
+    walls.push('正');
+    if (p.right) walls.push('右');
+    const stripW = (p.left ? p.D : 0) + p.W + (p.right ? p.D : 0);
+    const label = '壁面連続 ' + walls.join('→') + ' (' + formatAspect(stripW, p.H) + ')';
+    addFileLabel('span', label, e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const url = URL.createObjectURL(f);
+      // 既存 span を破棄
+      Object.keys(spanVideos).forEach(k => {
+        if (spanVideos[k]) {
+          try { URL.revokeObjectURL(spanVideos[k].src); } catch (_) {}
+          spanVideos[k] = null;
+        }
+      });
+      const faces = [];
+      if (p.left) faces.push('left');
+      faces.push('front');
+      if (p.right) faces.push('right');
+      faces.forEach(face => {
+        spanVideos[face] = makeVideo(url);
+      });
+      // 同一 blob URL を共有
+      reattachVideos(getParams());
+      applyMuteState();
+      if (playing) activeVideos().forEach(v => v.play().catch(() => {}));
+    });
+  } else {
+    addFileLabel('front', '正面', e => {
+      if (!e.target.files[0]) return;
+      videos.front = makeVideo(e.target.files[0]);
+      const scr = getScreen('front');
+      if (scr) setScreenVideo(scr, videos.front, 100, 0);
+      applyMuteState();
+      if (playing) videos.front.play().catch(() => {});
+    });
+    if (p.left) {
+      addFileLabel('left', '左側面', e => {
+        if (!e.target.files[0]) return;
+        videos.left = makeVideo(e.target.files[0]);
+        const scr = getScreen('left');
+        if (scr) setScreenVideo(scr, videos.left, 100, 0);
+        applyMuteState();
+        if (playing) videos.left.play().catch(() => {});
+      });
+    }
+    if (p.right) {
+      addFileLabel('right', '右側面', e => {
+        if (!e.target.files[0]) return;
+        videos.right = makeVideo(e.target.files[0]);
+        const scr = getScreen('right');
+        if (scr) setScreenVideo(scr, videos.right, 100, 0);
+        applyMuteState();
+        if (playing) videos.right.play().catch(() => {});
+      });
+    }
+  }
+
+  if (p.floor) {
+    addFileLabel('floor', '床面', e => {
+      if (!e.target.files[0]) return;
+      videos.floor = makeVideo(e.target.files[0]);
+      const scr = getScreen('floor');
+      if (scr) setScreenVideo(scr, videos.floor, 100, 0);
+      applyMuteState();
+      if (playing) videos.floor.play().catch(() => {});
+    });
+  }
+  if (p.ceiling) {
+    addFileLabel('ceiling', '天井面', e => {
+      if (!e.target.files[0]) return;
+      videos.ceiling = makeVideo(e.target.files[0]);
+      const scr = getScreen('ceiling');
+      if (scr) setScreenVideo(scr, videos.ceiling, 100, 0);
+      applyMuteState();
+      if (playing) videos.ceiling.play().catch(() => {});
+    });
+  }
+}
+
+function activeVideos() {
+  const p = getParams();
+  const list = [];
+  if (spanMode) {
+    if (p.left && spanVideos.left) list.push(spanVideos.left);
+    if (spanVideos.front) list.push(spanVideos.front);
+    if (p.right && spanVideos.right) list.push(spanVideos.right);
+  } else {
+    if (videos.front) list.push(videos.front);
+    if (p.left && videos.left) list.push(videos.left);
+    if (p.right && videos.right) list.push(videos.right);
+  }
+  if (p.floor && videos.floor) list.push(videos.floor);
+  if (p.ceiling && videos.ceiling) list.push(videos.ceiling);
+  return list;
+}
+
+function applyPreset(name) {
+  const pr = PRESETS[name];
+  if (!pr) return;
+  applyingPreset = true;
+  $('preset').value = name;
+  $('param-w').value = pr.W;
+  $('param-h').value = pr.H;
+  $('param-d').value = pr.D;
+  $('face-left').checked = pr.left;
+  $('face-right').checked = pr.right;
+  $('face-floor').checked = pr.floor;
+  $('face-ceiling').checked = pr.ceiling;
+  applyingPreset = false;
+  buildRoom();
+}
+
+function markCustom() {
+  if (applyingPreset) return;
+  const p = getParams();
+  let match = null;
+  for (const [key, pr] of Object.entries(PRESETS)) {
+    if (p.W === pr.W && p.H === pr.H && p.D === pr.D &&
+        p.left === pr.left && p.right === pr.right &&
+        p.floor === pr.floor && p.ceiling === pr.ceiling) {
+      match = key;
+      break;
+    }
+  }
+  // D の浮動小数比較
+  if (!match) {
+    for (const [key, pr] of Object.entries(PRESETS)) {
+      if (Math.abs(p.W - pr.W) < 0.01 && Math.abs(p.H - pr.H) < 0.01 && Math.abs(p.D - pr.D) < 0.01 &&
+          p.left === pr.left && p.right === pr.right &&
+          p.floor === pr.floor && p.ceiling === pr.ceiling) {
+        match = key;
+        break;
+      }
+    }
+  }
+  $('preset').value = match || 'custom';
+}
+
+// ---- 再生制御 ----
+$('mute').onchange = applyMuteState;
+$('play').onclick = () => {
+  const vs = activeVideos();
+  if (!vs.length) return;
+  playing = !playing;
+  $('play').textContent = playing ? '⏸ 停止' : '▶ 再生';
+  applyMuteState();
+  vs.forEach(v => playing ? v.play().catch(() => {}) : v.pause());
+};
+$('restart').onclick = () => activeVideos().forEach(v => { try { v.currentTime = 0; } catch (_) {} });
+$('seek').oninput = e => {
+  const vs = activeVideos();
+  if (!vs.length) return;
+  const t = e.target.value / 1000 * (vs[0].duration || 0);
+  vs.forEach(v => { try { v.currentTime = t; } catch (_) {} });
+};
+setInterval(() => {
+  const vs = activeVideos();
+  if (vs.length < 2) {
+    if (vs.length === 1 && vs[0].duration)
+      $('seek').value = vs[0].currentTime / vs[0].duration * 1000;
+    return;
+  }
+  const master = vs[0];
+  if (master.duration) $('seek').value = master.currentTime / master.duration * 1000;
+  for (let i = 1; i < vs.length; i++) {
+    if (Math.abs(vs[i].currentTime - master.currentTime) > 0.08) {
+      try { vs[i].currentTime = master.currentTime; } catch (_) {}
+    }
+  }
+}, 500);
+
+// ---- 視点操作 ----
+function applyView() {
+  const y = +$('orbit').value, x = +$('pitch').value, d = +$('dist').value / 100;
+  room.style.transform = 'scale(' + d + ') rotateX(' + (-x) + 'deg) rotateY(' + y + 'deg)';
+}
+['orbit', 'pitch', 'dist'].forEach(id => $(id).oninput = applyView);
+let drag = null;
+document.addEventListener('mousedown', e => {
+  if (e.target.closest('#ui')) return;
+  drag = { x: e.clientX, y: e.clientY, o: +$('orbit').value, p: +$('pitch').value };
+});
+document.addEventListener('mousemove', e => {
+  if (!drag) return;
+  $('orbit').value = Math.max(-40, Math.min(40, drag.o + (e.clientX - drag.x) / 8));
+  $('pitch').value = Math.max(0, Math.min(90, drag.p - (e.clientY - drag.y) / 10));
+  applyView();
+});
+document.addEventListener('mouseup', () => drag = null);
+// ホイールで距離(ズーム)調整 — プレゼンモード中も有効
+document.addEventListener('wheel', e => {
+  if (e.target.closest('#ui')) return;
+  const cur = +$('dist').value;
+  $('dist').value = Math.max(60, Math.min(140, cur - e.deltaY * 0.05));
+  applyView();
+}, { passive: true });
+
+// ---- プレゼンモード ----
+let presMode = false;
+function togglePres(on) {
+  presMode = on;
+  document.body.classList.toggle('presentation', on);
+  if (on && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+  if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+$('pres').onclick = () => togglePres(true);
+addEventListener('keydown', e => {
+  if (e.key === 'Escape' && presMode) togglePres(false);
+  if ((e.key === 'h' || e.key === 'H') && presMode) togglePres(false);
+});
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && presMode) togglePres(false);
+});
+
+$('show-people').onchange = e => {
+  document.querySelectorAll('.silhouette').forEach(s => s.classList.toggle('hidden', !e.target.checked));
+};
+
+// ---- モード切替 ----
+$('mode-sep').onchange = $('mode-span').onchange = () => {
+  spanMode = $('mode-span').checked;
+  // モード切替時も既存動画は維持しつつスロットと表示を更新
+  reattachVideos(getParams());
+  updateFileSlots(getParams());
+  updateAspectInfo(getParams());
+  applyMuteState();
+};
+
+// ---- パラメータ ----
+$('preset').onchange = e => {
+  const v = e.target.value;
+  if (v !== 'custom') applyPreset(v);
+};
+
+['param-w', 'param-h', 'param-d'].forEach(id => {
+  $(id).addEventListener('input', () => {
+    markCustom();
+    buildRoom();
+  });
+  $(id).addEventListener('change', () => {
+    markCustom();
+    buildRoom();
+  });
+});
+['face-left', 'face-right', 'face-floor', 'face-ceiling'].forEach(id => {
+  $(id).addEventListener('change', () => {
+    markCustom();
+    buildRoom();
+  });
+});
+
+// 初期: 水族館3面プリセット
+applyPreset('aquarium');
+</script>
+</body>
+</html>
