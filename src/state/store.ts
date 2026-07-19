@@ -2,9 +2,10 @@ import type { Action } from './actions';
 import { PRESETS } from './presets';
 import type { AppState, PresetName, RoomParams } from './types';
 
-export type ChangedKeys = Set<keyof AppState>;
-export type Listener = (state: AppState, changed: ChangedKeys) => void;
-export interface Store { getState(): AppState; dispatch(action: Action): void; subscribe(fn: Listener): () => void }
+export type ChangedKeys<S = AppState> = Set<keyof S>;
+export type Listener<S = AppState> = (state: S, changed: ChangedKeys<S>) => void;
+export interface GenericStore<S, A> { getState(): S; dispatch(action: A): void; subscribe(fn: Listener<S>): () => void }
+export type Store = GenericStore<AppState, Action>;
 
 function matchingPreset(params: RoomParams): PresetName {
   for (const [name, preset] of Object.entries(PRESETS)) {
@@ -34,16 +35,19 @@ export function reduce(state: AppState, action: Action): AppState {
   }
 }
 
-export function createStore(initial: AppState): Store {
+export function createStore(initial: AppState): Store;
+export function createStore<S, A>(initial: S, reducer: (state: S, action: A) => S): GenericStore<S, A>;
+export function createStore<S, A>(initial: S, reducer?: (state: S, action: A) => S): GenericStore<S, A> {
   let state = initial;
-  const listeners = new Set<Listener>();
+  const listeners = new Set<Listener<S>>();
+  const reduceState = reducer ?? (reduce as unknown as (state: S, action: A) => S);
   return {
     getState: () => state,
     dispatch(action) {
-      const next = reduce(state, action);
+      const next = reduceState(state, action);
       if (next === state) return;
-      const changed = new Set<keyof AppState>();
-      for (const key of Object.keys(state) as (keyof AppState)[]) if (state[key] !== next[key]) changed.add(key);
+      const changed = new Set<keyof S>();
+      for (const key of Object.keys(state as object) as (keyof S)[]) if (state[key] !== next[key]) changed.add(key);
       state = next;
       listeners.forEach((listener) => listener(state, changed));
     },

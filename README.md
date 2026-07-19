@@ -21,6 +21,20 @@ npx vite --host
 
 Quest Browserで証明書警告を許可し、表示されたPCのIPアドレスのURLを開いてください。
 
+## 全球／半球シミュレーター
+
+360度の全球表示と、equirect動画の上半分を使う半球（ドーム）表示を切り替えて、内側／外側から確認できます。半径、中心高さ、ガイド、地面表示も調整できます。
+
+開発時は `npm run dev` を起動し、`/dome.html` を開きます。公開用の単一HTMLは次のコマンドで `docs/dome/index.html` に生成します。ルートの多面版 `docs/index.html` には影響しません。
+
+```sh
+npm run build:dome
+```
+
+Questでは、HTTPSで公開した `/dome/` をQuest Browserで開き、Quest本体に保存したequirect動画を画面上で選択してから「ENTER VR」で入場します。VR中は `local-floor` を基準に球の中心直下へ立ち、視点はヘッドセットの姿勢に従います。画面上の内側／外側ビュー設定はVR中には適用されません。
+
+VR内では、左右いずれかのトリガーで再生／停止、右スティック左右で10秒シーク、左右いずれかのグリップで現在の水平位置を中心にリセットできます。Quest Browserのデコード負荷を考慮し、実機では4K〜5.7Kのequirect動画を推奨します（デスクトップではGPU次第で8Kも利用できます）。
+
 ## Quest実機での使い方
 
 1. `npm run build` で生成した単一HTMLを、HTTPS対応の静的ホスティングへ配置します。WebXRはセキュアコンテキストが必要なため、`file://` での直開きはできません。

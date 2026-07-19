@@ -1,0 +1,26 @@
+import type { GenericStore } from '../state/store';
+import type { DomeAction, DomeState } from './state';
+
+let sourceSequence = 0;
+function element<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}) { const node = document.createElement(tag); for (const [key, value] of Object.entries(attrs)) key === 'class' ? node.className = value : node.setAttribute(key, value); return node; }
+
+export function createPanel(host: HTMLElement, store: GenericStore<DomeState, DomeAction>, getVideo: () => HTMLVideoElement | null) {
+  host.innerHTML = '<div class="row controls"></div><div class="row params"></div><div id="aspect-info">動画未選択</div>';
+  const controls = host.querySelector('.controls')!, params = host.querySelector('.params')!;
+  const fileLabel = element('label', { class: 'file-button' }); fileLabel.textContent = '動画選択';
+  const file = element('input', { type: 'file', accept: 'video/*' }); file.onchange = () => { const selected = file.files?.[0]; if (!selected) return; const source = { id: `dome-${++sourceSequence}`, kind: 'file' as const, url: URL.createObjectURL(selected), name: selected.name }; store.dispatch({ type: 'source/add', source }); store.dispatch({ type: 'source/select', sourceId: source.id }); }; fileLabel.append(file); controls.append(fileLabel);
+  const play = element('button'); play.onclick = () => store.dispatch({ type: 'playback/toggle' }); controls.append(play);
+  const restart = element('button', { class: 'secondary' }); restart.textContent = '⏮ 先頭へ'; restart.onclick = () => store.dispatch({ type: 'playback/restart' }); controls.append(restart);
+  const seek = element('input', { type: 'range', min: '0', max: '1000', value: '0', class: 'seek' }); seek.oninput = () => { const video = getVideo(); if (video?.duration) store.dispatch({ type: 'playback/seek', time: +seek.value / 1000 * video.duration }); }; controls.append(seek);
+  const mute = element('label'); mute.innerHTML = '<input type="checkbox"> ミュート'; (mute.firstElementChild as HTMLInputElement).onchange = e => store.dispatch({ type: 'playback/mute', muted: (e.target as HTMLInputElement).checked }); controls.append(mute);
+  const projection = element('button'); projection.onclick = () => store.dispatch({ type: 'projection/set', mode: store.getState().projection === 'sphere' ? 'dome' : 'sphere' }); params.append(projection);
+  const view = element('button', { class: 'secondary' }); view.onclick = () => store.dispatch({ type: 'view/set', mode: store.getState().viewMode === 'inside' ? 'outside' : 'inside' }); params.append(view);
+  const radius = numeric('半径(m)', .1, .1, value => store.dispatch({ type: 'radius/set', radiusM: Math.max(.1, value) })); params.append(radius.label);
+  const height = numeric('中心高さ(m)', .1, -20, value => store.dispatch({ type: 'centerHeight/set', heightM: value })); params.append(height.label);
+  const guides = element('label'); guides.innerHTML = '<input type="checkbox"> ガイド表示'; (guides.firstElementChild as HTMLInputElement).onchange = e => store.dispatch({ type: 'guides/toggle', show: (e.target as HTMLInputElement).checked }); params.append(guides);
+  const groundToggle = element('label'); groundToggle.innerHTML = '<input type="checkbox"> 地面表示'; (groundToggle.firstElementChild as HTMLInputElement).onchange = e => store.dispatch({ type: 'ground/toggle', show: (e.target as HTMLInputElement).checked }); params.append(groundToggle);
+  function numeric(text: string, step: number, min: number, onValue: (value: number) => void) { const label = element('label'); label.textContent = text; const input = element('input', { type: 'number', step: String(step), min: String(min) }); input.onchange = () => { const value = Number(input.value); if (Number.isFinite(value)) onValue(value); }; label.append(input); return { label, input }; }
+  function render(state = store.getState()) { play.textContent = state.playback.playing ? '⏸ 停止' : '▶ 再生'; projection.textContent = state.projection === 'sphere' ? '全球 → 半球' : '半球 → 全球'; view.textContent = state.viewMode === 'inside' ? '内部 → 外部' : '外部 → 内部'; radius.input.value = String(state.radiusM); height.input.value = String(state.centerHeightM); (guides.firstElementChild as HTMLInputElement).checked = state.showGuides; (groundToggle.firstElementChild as HTMLInputElement).checked = state.showGround; (mute.firstElementChild as HTMLInputElement).checked = state.playback.muted; const video = getVideo(); const dimensions = video?.videoWidth ? `${video.videoWidth}×${video.videoHeight}` : '解像度取得中'; (host.querySelector('#aspect-info') as HTMLElement).textContent = state.sourceId ? `${state.sources[state.sourceId]?.name ?? ''} ｜ ${dimensions} ｜ equirect 2:1${state.projection === 'dome' ? '（上半分を使用）' : ''}` : '動画未選択（equirect 2:1）'; }
+  render(); const unsubscribe = store.subscribe(render); let frame = 0; const tick = () => { const video = getVideo(); if (video?.duration && document.activeElement !== seek) seek.value = String(video.currentTime / video.duration * 1000); frame = requestAnimationFrame(tick); }; frame = requestAnimationFrame(tick);
+  return () => { unsubscribe(); cancelAnimationFrame(frame); host.innerHTML = ''; };
+}
