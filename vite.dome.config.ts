@@ -19,7 +19,7 @@ export default defineConfig({
   plugins: [...(useSsl ? [basicSsl()] : []), viteSingleFile(), domeIndex()],
   publicDir: false,
   build: {
-    outDir: 'docs/dome',
+    outDir: 'dist-dome', // 公開は別リポジトリ vr-simulator-dome-v1 (docsには含めない)
     emptyOutDir: true,
     rollupOptions: {
       input: 'dome.html',
