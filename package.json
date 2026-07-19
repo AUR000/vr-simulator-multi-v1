@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "build:dome": "tsc && vite build --config vite.dome.config.ts",
+    "build:aquarium": "tsc && vite build --config vite.aquarium.config.ts",
     "test": "vitest run"
   },
   "dependencies": {

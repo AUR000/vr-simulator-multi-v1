@@ -31,6 +31,16 @@ Quest Browserで証明書警告を許可し、表示されたPCのIPアドレス
 npm run build:dome
 ```
 
+## 水族館案件向け3面専用版
+
+正面・右側面・床面を水族館プリセット（W6000 × H2700 × D4187.5mm）に固定し、案件相手へそのまま渡せるよう操作UIを簡素化した専用版です。公開先は別リポジトリ `vr-simulator-three-v1` です。
+
+開発時は `npm run dev` を起動して `/aquarium.html` を開きます。配布用の単一HTMLは次のコマンドで `dist-aquarium/index.html` に生成します。
+
+```sh
+npm run build:aquarium
+```
+
 Questでは、HTTPSで公開した `/dome/` をQuest Browserで開き、Quest本体に保存したequirect動画を画面上で選択してから「ENTER VR」で入場します。VR中は `local-floor` を基準に球の中心直下へ立ち、視点はヘッドセットの姿勢に従います。画面上の内側／外側ビュー設定はVR中には適用されません。
 
 VR内では、左右いずれかのトリガーで再生／停止、右スティック左右で10秒シーク、左右いずれかのグリップで現在の水平位置を中心にリセットできます。Quest Browserのデコード負荷を考慮し、実機では4K〜5.7Kのequirect動画を推奨します（デスクトップではGPU次第で8Kも利用できます）。
