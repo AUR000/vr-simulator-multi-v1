@@ -6,6 +6,8 @@ interface XrRenderer {
   xr: {
     enabled: boolean;
     setReferenceSpaceType(type: 'local-floor'): void;
+    setFramebufferScaleFactor?(factor: number): void;
+    setFoveation?(level: number): void;
     addEventListener(type: 'sessionstart' | 'sessionend', listener: () => void): void;
     removeEventListener(type: 'sessionstart' | 'sessionend', listener: () => void): void;
   };
@@ -21,6 +23,10 @@ export function setupXrSession(
 ) {
   renderer.xr.enabled = true;
   renderer.xr.setReferenceSpaceType('local-floor');
+  // 4K素材の解像感をVRで出すための品質設定。
+  // framebuffer等倍はセッション開始前に設定が必要、foveation 0 は視野周縁のぼかし無効化
+  renderer.xr.setFramebufferScaleFactor?.(1.0);
+  renderer.xr.setFoveation?.(0);
 
   const button = VRButton.createButton(renderer);
   button.classList.add('xr-entry-button');

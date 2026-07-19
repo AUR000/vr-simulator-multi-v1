@@ -31,7 +31,8 @@ export class DefaultMediaManager implements MediaManager {
   acquire(source: MediaSource) {
     const old = this.entries.get(source.id); if (old) return old.video;
     const video = document.createElement('video'); video.src = source.url; video.loop = true; video.muted = true; video.playsInline = true; video.preload = 'auto';
-    const texture = new VideoTexture(video); texture.colorSpace = SRGBColorSpace; texture.generateMipmaps = false; texture.minFilter = LinearFilter;
+    // anisotropy はレンダラ側の上限に自動クランプされる。斜めから見る面/ドーム周縁の4K素材の解像感に必須
+    const texture = new VideoTexture(video); texture.colorSpace = SRGBColorSpace; texture.generateMipmaps = false; texture.minFilter = LinearFilter; texture.anisotropy = 16;
     this.entries.set(source.id, { source, video, texture }); return video;
   }
   get(id: string) { return this.entries.get(id)?.video ?? null; }
