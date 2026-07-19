@@ -1,4 +1,5 @@
 import type { GenericStore } from '../state/store';
+import { createPresentationMode } from '../ui/presentation';
 import type { DomeAction, DomeState } from './state';
 
 let sourceSequence = 0;
@@ -13,6 +14,7 @@ export function createPanel(host: HTMLElement, store: GenericStore<DomeState, Do
   const restart = element('button', { class: 'secondary' }); restart.textContent = '⏮ 先頭へ'; restart.onclick = () => store.dispatch({ type: 'playback/restart' }); controls.append(restart);
   const seek = element('input', { type: 'range', min: '0', max: '1000', value: '0', class: 'seek' }); seek.oninput = () => { const video = getVideo(); if (video?.duration) store.dispatch({ type: 'playback/seek', time: +seek.value / 1000 * video.duration }); }; controls.append(seek);
   const mute = element('label'); mute.innerHTML = '<input type="checkbox"> ミュート'; (mute.firstElementChild as HTMLInputElement).onchange = e => store.dispatch({ type: 'playback/mute', muted: (e.target as HTMLInputElement).checked }); controls.append(mute);
+  const presentation = createPresentationMode(); const pres = element('button', { class: 'secondary' }); pres.textContent = '🖥 全画面'; pres.title = '全画面プレゼンモード(Esc/Hで解除)'; pres.onclick = () => presentation.enter(); controls.append(pres);
   const projection = element('button'); projection.onclick = () => store.dispatch({ type: 'projection/set', mode: store.getState().projection === 'sphere' ? 'dome' : 'sphere' }); params.append(projection);
   const inputFormat = element('button', { class: 'secondary' }); inputFormat.onclick = () => store.dispatch({ type: 'domeInput/set', format: store.getState().domeInput === 'fisheye' ? 'equirect' : 'fisheye' }); params.append(inputFormat);
   const view = element('button', { class: 'secondary' }); view.onclick = () => store.dispatch({ type: 'view/set', mode: store.getState().viewMode === 'inside' ? 'outside' : 'inside' }); params.append(view);
@@ -23,5 +25,5 @@ export function createPanel(host: HTMLElement, store: GenericStore<DomeState, Do
   function numeric(text: string, step: number, min: number, onValue: (value: number) => void) { const label = element('label'); label.textContent = text; const input = element('input', { type: 'number', step: String(step), min: String(min) }); input.onchange = () => { const value = Number(input.value); if (Number.isFinite(value)) onValue(value); }; label.append(input); return { label, input }; }
   function render(state = store.getState()) { play.textContent = state.playback.playing ? '⏸ 停止' : '▶ 再生'; projection.textContent = state.projection === 'sphere' ? '全球 → 半球' : '半球 → 全球'; view.textContent = state.viewMode === 'inside' ? '内部 → 外部' : '外部 → 内部'; const fisheye = state.domeInput === 'fisheye'; inputFormat.textContent = fisheye ? '入力: ドームマスター' : '入力: equirect上半分'; inputFormat.style.display = state.projection === 'dome' ? '' : 'none'; radius.input.value = String(state.radiusM); height.input.value = String(state.centerHeightM); (guides.firstElementChild as HTMLInputElement).checked = state.showGuides; (groundToggle.firstElementChild as HTMLInputElement).checked = state.showGround; (mute.firstElementChild as HTMLInputElement).checked = state.playback.muted; const video = getVideo(); const dimensions = video?.videoWidth ? `${video.videoWidth}×${video.videoHeight}` : '解像度取得中'; const format = state.projection === 'dome' ? (fisheye ? 'ドームマスター(正方形魚眼)' : 'equirect 2:1（上半分を使用）') : 'equirect 2:1'; (host.querySelector('#aspect-info') as HTMLElement).textContent = state.sourceId ? `${state.sources[state.sourceId]?.name ?? ''} ｜ ${dimensions} ｜ ${format}` : `動画未選択（${format}）`; }
   render(); const unsubscribe = store.subscribe(render); let frame = 0; const tick = () => { const video = getVideo(); if (video?.duration && document.activeElement !== seek) seek.value = String(video.currentTime / video.duration * 1000); frame = requestAnimationFrame(tick); }; frame = requestAnimationFrame(tick);
-  return () => { unsubscribe(); cancelAnimationFrame(frame); host.innerHTML = ''; };
+  return () => { unsubscribe(); cancelAnimationFrame(frame); presentation.dispose(); host.innerHTML = ''; };
 }
