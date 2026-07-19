@@ -2,6 +2,8 @@ import type { MediaSource, PlaybackState } from '../state/types';
 
 export type ProjectionMode = 'sphere' | 'dome';
 export type DomeViewMode = 'inside' | 'outside';
+/** 半球モードの入力形式。fisheye=ドームマスター(正方形魚眼)、equirect=エクイレクタングラー上半分。全球は常にequirect */
+export type DomeInputFormat = 'fisheye' | 'equirect';
 
 export interface DomeState {
   projection: ProjectionMode;
@@ -13,6 +15,7 @@ export interface DomeState {
   playback: PlaybackState;
   showGuides: boolean;
   showGround: boolean;
+  domeInput: DomeInputFormat;
 }
 
 export type DomeAction =
@@ -27,13 +30,15 @@ export type DomeAction =
   | { type: 'playback/restart' }
   | { type: 'playback/mute'; muted: boolean }
   | { type: 'guides/toggle'; show: boolean }
-  | { type: 'ground/toggle'; show: boolean };
+  | { type: 'ground/toggle'; show: boolean }
+  | { type: 'domeInput/set'; format: DomeInputFormat };
 
 export const initialState: DomeState = {
   projection: 'sphere', radiusM: 7.5, centerHeightM: 1.6, viewMode: 'inside',
   sources: {}, sourceId: null,
   playback: { playing: false, muted: true, seekRequest: null }, showGuides: true,
   showGround: false,
+  domeInput: 'fisheye',
 };
 
 export function reduce(state: DomeState, action: DomeAction): DomeState {
@@ -51,5 +56,6 @@ export function reduce(state: DomeState, action: DomeAction): DomeState {
     case 'playback/mute': return action.muted === state.playback.muted ? state : { ...state, playback: { ...state.playback, muted: action.muted } };
     case 'guides/toggle': return action.show === state.showGuides ? state : { ...state, showGuides: action.show };
     case 'ground/toggle': return action.show === state.showGround ? state : { ...state, showGround: action.show };
+    case 'domeInput/set': return action.format === state.domeInput ? state : { ...state, domeInput: action.format };
   }
 }

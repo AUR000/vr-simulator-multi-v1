@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { DomeState, ProjectionMode } from './state';
+import type { DomeInputFormat, DomeState, ProjectionMode } from './state';
 
 export class SphereView {
   private group = new THREE.Group();
@@ -9,6 +9,7 @@ export class SphereView {
   private texture: any | null = null;
   private projection: ProjectionMode | null = null;
   private radius = -1;
+  private domeInput: DomeInputFormat = 'fisheye';
 
   constructor(private scene: any) { this.group.add(this.guides); scene.add(this.group); }
 
@@ -17,23 +18,49 @@ export class SphereView {
     this.texture = texture;
     this.material.map = texture;
     this.material.color.set(texture ? 0xffffff : 0x17232d);
-    this.applyTextureUv(this.projection ?? 'sphere');
+    this.applyTextureUv(this.projection ?? 'sphere', this.domeInput);
     this.material.needsUpdate = true;
   }
 
-  private applyTextureUv(mode: ProjectionMode) {
+  private applyTextureUv(mode: ProjectionMode, input: DomeInputFormat) {
     if (!this.texture) return;
-    this.texture.offset.set(0, mode === 'dome' ? .5 : 0);
-    this.texture.repeat.set(1, mode === 'dome' ? .5 : 1);
+    // 半球equirect時のみ上半分をoffset/repeatで切り出す。魚眼はジオメトリ側のUVで展開するため全面参照
+    const useHalf = mode === 'dome' && input === 'equirect';
+    this.texture.offset.set(0, useHalf ? .5 : 0);
+    this.texture.repeat.set(1, useHalf ? .5 : 1);
     // wrapT intentionally remains its default ClampToEdgeWrapping.
     this.texture.needsUpdate = true;
   }
 
-  private geometry(mode: ProjectionMode, radius: number) {
-    const geometry = mode === 'sphere'
-      ? new THREE.SphereGeometry(radius, 64, 48)
-      : new THREE.SphereGeometry(radius, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2);
+  /**
+   * ドームマスター(正方形魚眼)用UV: 画像中心=天頂、画像下端=正面(-z)、等距離射影。
+   * 前提の向き規約: 観客が-z(正面)を向いたとき画像の右端が観客の右(+x)に来る標準ドームマスター。
+   */
+  private applyFisheyeUv(geometry: any) {
+    const position = geometry.attributes.position;
+    const uv = geometry.attributes.uv;
+    for (let i = 0; i < position.count; i++) {
+      const x = position.getX(i), y = position.getY(i), z = position.getZ(i);
+      const r = Math.sqrt(x * x + y * y + z * z) || 1;
+      const theta = Math.acos(Math.min(1, Math.max(-1, y / r)));   // 天頂からの角度 0..π/2
+      const phi = Math.atan2(x, -z);                                // 正面(-z)基準の方位角
+      const R = theta / (Math.PI / 2) * .5;                         // 等距離射影: 天頂0 → 縁0.5
+      uv.setXY(i, .5 + R * Math.sin(phi), .5 - R * Math.cos(phi));
+    }
+    uv.needsUpdate = true;
+  }
+
+  private geometry(mode: ProjectionMode, radius: number, input: DomeInputFormat) {
+    if (mode === 'sphere') {
+      const geometry = new THREE.SphereGeometry(radius, 64, 48);
+      geometry.scale(-1, 1, 1);
+      return geometry;
+    }
+    // 魚眼はUVマッピングが非線形なので分割を細かくして歪みを抑える
+    const fisheye = input === 'fisheye';
+    const geometry = new THREE.SphereGeometry(radius, fisheye ? 96 : 64, fisheye ? 48 : 24, 0, Math.PI * 2, 0, Math.PI / 2);
     geometry.scale(-1, 1, 1);
+    if (fisheye) this.applyFisheyeUv(geometry);
     return geometry;
   }
 
@@ -70,13 +97,13 @@ export class SphereView {
   }
 
   update(state: DomeState, changed: Set<keyof DomeState>) {
-    if (!this.mesh || changed.has('projection') || changed.has('radiusM')) {
+    if (!this.mesh || changed.has('projection') || changed.has('radiusM') || changed.has('domeInput')) {
       this.mesh?.geometry.dispose();
-      const geometry = this.geometry(state.projection, state.radiusM);
+      const geometry = this.geometry(state.projection, state.radiusM, state.domeInput);
       if (this.mesh) this.mesh.geometry = geometry;
       else { this.mesh = new THREE.Mesh(geometry, this.material); this.group.add(this.mesh); }
-      this.projection = state.projection; this.radius = state.radiusM;
-      this.applyTextureUv(state.projection); this.buildGuides(state.projection, state.radiusM);
+      this.projection = state.projection; this.radius = state.radiusM; this.domeInput = state.domeInput;
+      this.applyTextureUv(state.projection, state.domeInput); this.buildGuides(state.projection, state.radiusM);
     }
     this.group.position.y = state.centerHeightM;
     this.guides.visible = state.showGuides;

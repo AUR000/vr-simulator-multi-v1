@@ -19,6 +19,12 @@ describe('dome reducer', () => {
     expect(reduce(state, { type: 'radius/set', radiusM: 9 }).radiusM).toBe(9);
     expect(reduce(state, { type: 'guides/toggle', show: false }).showGuides).toBe(false);
   });
+  it('toggles dome input format and keeps fisheye as the default', () => {
+    expect(initialState.domeInput).toBe('fisheye');
+    const equirect = reduce(initialState, { type: 'domeInput/set', format: 'equirect' });
+    expect(equirect.domeInput).toBe('equirect');
+    expect(reduce(equirect, { type: 'domeInput/set', format: 'equirect' })).toBe(equirect);
+  });
   it('works with the generic store and reports changed keys', () => {
     const store = createStore<DomeState, DomeAction>(initialState, reduce);
     let changed: Set<keyof DomeState> | undefined;
