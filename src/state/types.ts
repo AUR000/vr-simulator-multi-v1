@@ -14,6 +14,8 @@ export interface MediaSource {
   kind: 'file' | 'url';
   url: string;
   name: string;
+  /** 素材種別。省略時は 'video'(後方互換)。'image' は静止画(絵コンテ等) */
+  content?: 'video' | 'image';
 }
 
 export interface PlaybackState {
