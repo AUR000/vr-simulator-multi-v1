@@ -15,7 +15,7 @@ const initial = { ...initialState, params: { ...PRESETS.aquarium, faces: { ...PR
 
 /** 各面の輪郭を太い角柱で描くグループ。面の境界を説明で示すため。面構成は固定なので一度だけ構築 */
 function createBorders(scene: any, state: AppState) {
-  const T = 0.05; // 角柱の太さ(m) = 5cm
+  const T = 0.017; // 角柱の太さ(m) ≈ 1.7cm
   const group = new THREE.Group(); group.visible = false; scene.add(group);
   const material = new THREE.MeshBasicMaterial({ color: 0xff3860 });
   const geometries: any[] = [];
