@@ -3,7 +3,6 @@ import { DefaultMediaManager } from '../media/mediaManager';
 import { EnvironmentView } from '../scene/environment';
 import { computeFaces } from '../scene/faces';
 import { RoomView } from '../scene/room';
-import { PRESETS } from '../state/presets';
 import { createStore, initialState } from '../state/store';
 import type { AppState } from '../state/types';
 import { createViewControls } from '../ui/viewControls';
@@ -11,7 +10,11 @@ import { setupXrControllers } from '../xr/controllers';
 import { setupXrSession } from '../xr/session';
 import { createPanel } from './panel';
 
-const initial = { ...initialState, params: { ...PRESETS.aquarium, faces: { ...PRESETS.aquarium.faces } }, preset: 'aquarium' as const };
+// 水族館コーナー3面LED 確定仕様(2026-07-26 ディレクター / aquarium-display-spec):
+// 配置(客席から見て) 側面=左 / 正面=右 / 床面=手前。
+// 正面 6000×2700(20:9)=3840×1728 / 側面 4200×2700(14:9)=2688×1728 / 床 6000×4200=3840×2688
+// 床Dはプレゼン用に4200へ統一(実装実寸は4187.5だが12.5mm差は無視でOK=ディレクター判断)。P1.5625 / 60fps
+const initial = { ...initialState, params: { W: 6000, H: 2700, D: 4200, faces: { front: true, left: true, right: false, floor: true, ceiling: false } }, preset: 'aquarium' as const };
 
 /** 各面の輪郭を太い角柱で描くグループ。面の境界を説明で示すため。面構成は固定なので一度だけ構築 */
 function createBorders(scene: any, state: AppState) {
