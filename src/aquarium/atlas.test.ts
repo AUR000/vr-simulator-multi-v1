@@ -14,8 +14,9 @@ describe('aquarium atlas UVs', () => {
     expect(atlasFaceUv(ATLAS_3264x2208, 'front')).toEqual({
       offsetX: 1344 / 3264, offsetY: 1344 / 2208, repeatX: 1920 / 3264, repeatY: 864 / 2208,
     });
+    // 床は右下（左下1344×1344は未使用領域）
     expect(atlasFaceUv(ATLAS_3264x2208, 'floor')).toEqual({
-      offsetX: 0, offsetY: 0, repeatX: 1920 / 3264, repeatY: 1344 / 2208,
+      offsetX: 1344 / 3264, offsetY: 0, repeatX: 1920 / 3264, repeatY: 1344 / 2208,
     });
   });
 

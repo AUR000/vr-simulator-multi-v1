@@ -14,11 +14,14 @@ export interface AtlasLayout {
 
 export interface AtlasUv { offsetX: number; offsetY: number; repeatX: number; repeatY: number }
 
-/** 確定レイアウト（各面実画素の1/2スケール） */
+/**
+ * 確定レイアウト（各面実画素の1/2スケール）
+ * 壁34:9=上部全幅 / 床=右下 / 左下1344×1344は未使用（灰色＝表示範囲外の意味）
+ */
 export const ATLAS_3264x2208: AtlasLayout = {
   totalW: 3264, totalH: 2208,
   wall: { x: 0, y: 0, w: 3264, h: 864 },
-  floor: { x: 0, y: 864, w: 1920, h: 1344 },
+  floor: { x: 1344, y: 864, w: 1920, h: 1344 },
   sideWidthInWall: 1344,
 };
 
