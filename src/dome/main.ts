@@ -20,7 +20,7 @@ const ground = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshBas
 const store = createStore<DomeState, DomeAction>(initialState, reduce), media = new DefaultMediaManager(), sphere = new SphereView(scene);
 let activeId: string | null = null, seekSeq = -1;
 
-function mediaState(state: DomeState): AppState { const source = state.sourceId ? state.sources[state.sourceId] : null; return { params: { W: 1, H: 1, D: 1, faces: { front: true, left: false, right: false, floor: false, ceiling: false } }, preset: 'custom', mode: 'separate', sources: source ? { [source.id]: source } : {}, assignments: source ? { front: source.id } : {}, spanSourceId: null, playback: state.playback, view: { orbit: 0, pitch: 0, dist: 1 }, showPeople: false }; }
+function mediaState(state: DomeState): AppState { const source = state.sourceId ? state.sources[state.sourceId] : null; return { params: { W: 1, H: 1, D: 1, faces: { front: true, left: false, right: false, floor: false, ceiling: false } }, preset: 'custom', mode: 'separate', sources: source ? { [source.id]: source } : {}, assignments: source ? { front: source.id } : {}, spanSourceId: null, atlasSourceId: null, playback: state.playback, view: { orbit: 0, pitch: 0, dist: 1 }, showPeople: false }; }
 // The shared XR helpers consume the multi-face Store shape. This adapter keeps
 // media lookup compatible while routing the playback actions to the dome store.
 const xrStore: Store = {

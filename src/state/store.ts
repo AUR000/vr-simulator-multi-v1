@@ -26,6 +26,7 @@ export function reduce(state: AppState, action: Action): AppState {
     case 'source/add': return { ...state, sources: { ...state.sources, [action.source.id]: action.source } };
     case 'assign/face': { const assignments = { ...state.assignments }; action.sourceId ? assignments[action.face] = action.sourceId : delete assignments[action.face]; return { ...state, assignments }; }
     case 'assign/span': return { ...state, spanSourceId: action.sourceId };
+    case 'assign/atlas': return { ...state, atlasSourceId: action.sourceId };
     case 'playback/toggle': return { ...state, playback: { ...state.playback, playing: !state.playback.playing } };
     case 'playback/seek': return { ...state, playback: { ...state.playback, seekRequest: { time: action.time, seq: (state.playback.seekRequest?.seq ?? 0) + 1 } } };
     case 'playback/restart': return { ...state, playback: { ...state.playback, seekRequest: { time: 0, seq: (state.playback.seekRequest?.seq ?? 0) + 1 } } };
@@ -57,7 +58,7 @@ export function createStore<S, A>(initial: S, reducer?: (state: S, action: A) =>
 
 export const initialState: AppState = {
   params: { ...PRESETS.aquarium, faces: { ...PRESETS.aquarium.faces } }, preset: 'aquarium', mode: 'separate',
-  sources: {}, assignments: {}, spanSourceId: null,
+  sources: {}, assignments: {}, spanSourceId: null, atlasSourceId: null,
   playback: { playing: false, muted: true, seekRequest: null },
   view: { orbit: 18, pitch: 14, dist: 100 }, showPeople: true,
 };

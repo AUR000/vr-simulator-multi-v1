@@ -10,4 +10,5 @@ describe('pickAudioSource', () => {
     expect(pickAudioSource({ ...state, assignments: { right:'r', floor:'d', left:'l', ceiling:'c' } })).toBe('r');
   });
   it('uses the one span source for an active wall', () => expect(pickAudioSource({ ...initialState, mode:'span', spanSourceId:'s', sources:{ s:{id:'s',kind:'url',url:'s',name:'s'} } })).toBe('s'));
+  it('uses the atlas source', () => expect(pickAudioSource({ ...initialState, mode:'atlas', atlasSourceId:'a', sources:{ a:{id:'a',kind:'url',url:'a',name:'a'} } })).toBe('a'));
 });

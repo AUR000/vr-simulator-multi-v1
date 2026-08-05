@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { MediaManager } from '../media/mediaManager';
 import type { ChangedKeys } from '../state/store';
 import type { AppState, FaceId } from '../state/types';
+import { ATLAS_3264x2208, atlasFaceUv } from '../aquarium/atlas';
 import { computeFaces, computeSpanUV, type FaceDescriptor } from './faces';
 
 export function createFaceMaterial(_face: FaceDescriptor, texture: any | null) {
@@ -13,6 +14,14 @@ export class RoomView {
   private meshes = new Map<FaceId, any>();
   constructor(private scene: any, private media: MediaManager) { scene.add(this.group); }
   private texture(state: AppState, face: FaceDescriptor) {
+    if (state.mode === 'atlas') {
+      if (face.id !== 'front' && face.id !== 'left' && face.id !== 'floor') return null;
+      if (!state.atlasSourceId) return null;
+      const texture = this.media.cloneTexture(state.atlasSourceId); if (!texture) return null;
+      const uv = atlasFaceUv(ATLAS_3264x2208, face.id);
+      texture.offset.set(uv.offsetX, uv.offsetY); texture.repeat.set(uv.repeatX, uv.repeatY);
+      texture.needsUpdate = true; return texture;
+    }
     const span = state.mode === 'span' && face.spanRole === 'wall';
     const id = span ? state.spanSourceId : state.assignments[face.id]; if (!id) return null;
     const texture = this.media.cloneTexture(id); if (!texture) return null;
@@ -30,6 +39,6 @@ export class RoomView {
     }
   }
   private swapTextures(state: AppState) { for (const face of computeFaces(state.params)) { const material = this.meshes.get(face.id)?.material; if (!material) continue; material.map?.dispose(); material.map = this.texture(state, face); material.color.set(material.map ? 0xffffff : 0x0b1926); material.needsUpdate = true; } }
-  update(state: AppState, changed: ChangedKeys) { if (!this.meshes.size || changed.has('params') || changed.has('mode')) this.rebuild(state); else if (changed.has('assignments') || changed.has('spanSourceId') || changed.has('sources')) this.swapTextures(state); }
+  update(state: AppState, changed: ChangedKeys) { if (!this.meshes.size || changed.has('params') || changed.has('mode')) this.rebuild(state); else if (changed.has('assignments') || changed.has('spanSourceId') || changed.has('atlasSourceId') || changed.has('sources')) this.swapTextures(state); }
   dispose() { this.clear(); this.scene.remove(this.group); }
 }

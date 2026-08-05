@@ -7,6 +7,7 @@ export type Action =
   | { type: 'source/add'; source: MediaSource }
   | { type: 'assign/face'; face: FaceId; sourceId: string | null }
   | { type: 'assign/span'; sourceId: string | null }
+  | { type: 'assign/atlas'; sourceId: string | null }
   | { type: 'playback/toggle' }
   | { type: 'playback/seek'; time: number }
   | { type: 'playback/restart' }

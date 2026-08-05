@@ -4,6 +4,7 @@ import type { AppState, FaceId, MediaSource } from '../state/types';
 const AUDIO_PRIORITY: FaceId[] = ['front', 'right', 'floor', 'left', 'ceiling'];
 
 export function pickAudioSource(state: AppState): string | null {
+  if (state.mode === 'atlas') return state.atlasSourceId && state.sources[state.atlasSourceId] ? state.atlasSourceId : null;
   for (const face of AUDIO_PRIORITY) {
     if (!state.params.faces[face]) continue;
     const id = state.mode === 'span' && (face === 'front' || face === 'left' || face === 'right') ? state.spanSourceId : state.assignments[face];
@@ -54,6 +55,7 @@ export class DefaultMediaManager implements MediaManager {
   cloneTexture(id: string) { const texture = this.getTexture(id); if (!texture) return null; const clone = texture.clone(); clone.needsUpdate = true; return clone; }
   private activeIds(state: AppState) {
     const ids = new Set<string>();
+    if (state.mode === 'atlas') { if (state.atlasSourceId) ids.add(state.atlasSourceId); return ids; }
     for (const face of AUDIO_PRIORITY) if (state.params.faces[face]) {
       const id = state.mode === 'span' && ['front', 'left', 'right'].includes(face) ? state.spanSourceId : state.assignments[face]; if (id) ids.add(id);
     }

@@ -14,4 +14,8 @@ describe('store reducer', () => {
     expect(store.getState().playback.seekRequest?.seq).toBe(2);
     expect([...listener.mock.calls[0][1]]).toEqual(['playback']);
   });
+  it('assigns an atlas source independently from the span source', () => {
+    const state = reduce(initialState, { type: 'assign/atlas', sourceId: 'atlas' });
+    expect(state.atlasSourceId).toBe('atlas'); expect(state.spanSourceId).toBeNull();
+  });
 });

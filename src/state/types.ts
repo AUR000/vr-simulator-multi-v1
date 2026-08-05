@@ -1,5 +1,5 @@
 export type FaceId = 'front' | 'left' | 'right' | 'floor' | 'ceiling';
-export type DisplayMode = 'separate' | 'span';
+export type DisplayMode = 'separate' | 'span' | 'atlas';
 export type PresetName = 'aquarium' | 'u' | 'l' | 'box' | 'custom';
 
 export interface RoomParams {
@@ -37,6 +37,7 @@ export interface AppState {
   sources: Record<string, MediaSource>;
   assignments: Partial<Record<FaceId, string>>;
   spanSourceId: string | null;
+  atlasSourceId: string | null;
   playback: PlaybackState;
   view: ViewState;
   showPeople: boolean;
