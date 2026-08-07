@@ -38,9 +38,12 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .01, 100);
 const store = createStore(initial);
 const media = new DefaultMediaManager();
-const room = new RoomView(scene, media);
-const environment = new EnvironmentView(scene);
-const view = createViewControls(camera, renderer.domElement, store);
+// 3面版と同じく、部屋一式を奥へずらしてVRの立ち位置を正面壁から離す
+const VIEWER_SETBACK_M = 1.2;
+const roomAnchor = new THREE.Group(); roomAnchor.position.z = -VIEWER_SETBACK_M; scene.add(roomAnchor);
+const room = new RoomView(roomAnchor, media);
+const environment = new EnvironmentView(roomAnchor, .7);
+const view = createViewControls(camera, renderer.domElement, store, -VIEWER_SETBACK_M);
 const disposeXr = setupXrSession(renderer, store, media, view.controls);
 const xrControllers = setupXrControllers(renderer, store, media);
 
