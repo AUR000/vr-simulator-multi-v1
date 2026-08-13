@@ -7,7 +7,7 @@ import type { AppState, MediaSource } from '../state/types';
 import { createViewControls } from '../ui/viewControls';
 import { setupXrControllers } from '../xr/controllers';
 import { setupXrSession } from '../xr/session';
-import { PV_SOURCES, USE_CROSSORIGIN } from './config';
+import { PV_INPUT_MODE, PV_SOURCES, USE_CROSSORIGIN } from './config';
 import { createStartScreen } from './startScreen';
 
 const initial: AppState = {
@@ -19,7 +19,7 @@ const initial: AppState = {
     faces: { front: true, left: true, right: false, floor: true, ceiling: false },
   },
   preset: 'aquarium',
-  mode: 'span',
+  mode: PV_INPUT_MODE,
   sources: {},
   assignments: {},
   spanSourceId: null,
@@ -57,12 +57,12 @@ const unsubscribe = store.subscribe((state, changed) => {
   if (changed.has('params') || changed.has('showPeople')) environment.update(state);
 });
 
-const wallSource: MediaSource = {
-  id: 'pv-wall', kind: 'url', url: PV_SOURCES.wall, name: 'PV wall', content: 'video',
-};
-const floorSource: MediaSource = {
-  id: 'pv-floor', kind: 'url', url: PV_SOURCES.floor, name: 'PV floor', content: 'video',
-};
+const configuredSources: MediaSource[] = PV_INPUT_MODE === 'atlas'
+  ? [{ id: 'pv-atlas', kind: 'url', url: PV_SOURCES.atlas, name: 'PV atlas', content: 'video' }]
+  : [
+      { id: 'pv-wall', kind: 'url', url: PV_SOURCES.wall, name: 'PV wall', content: 'video' },
+      { id: 'pv-floor', kind: 'url', url: PV_SOURCES.floor, name: 'PV floor', content: 'video' },
+    ];
 
 // MediaManager が src を設定する前に crossOrigin を付与する。acquire は各ソース1回だけ。
 function acquirePvSource(source: MediaSource) {
@@ -80,13 +80,16 @@ function acquirePvSource(source: MediaSource) {
   }
 }
 
-const videos = [acquirePvSource(wallSource), acquirePvSource(floorSource)].filter(
+const videos = configuredSources.map((source) => acquirePvSource(source)).filter(
   (video): video is HTMLVideoElement => video !== null,
 );
-store.dispatch({ type: 'source/add', source: wallSource });
-store.dispatch({ type: 'assign/span', sourceId: wallSource.id });
-store.dispatch({ type: 'source/add', source: floorSource });
-store.dispatch({ type: 'assign/face', face: 'floor', sourceId: floorSource.id });
+configuredSources.forEach((source) => store.dispatch({ type: 'source/add', source }));
+if (PV_INPUT_MODE === 'atlas') {
+  store.dispatch({ type: 'assign/atlas', sourceId: configuredSources[0].id });
+} else {
+  store.dispatch({ type: 'assign/span', sourceId: configuredSources[0].id });
+  store.dispatch({ type: 'assign/face', face: 'floor', sourceId: configuredSources[1].id });
+}
 
 const vrSupported = 'xr' in navigator;
 const xrEntryButton = document.querySelector<HTMLElement>('.xr-entry-button');
@@ -103,7 +106,7 @@ startScreen = createStartScreen({
 
 function updateReadiness() {
   const readyCount = videos.filter((video) => video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA).length;
-  startScreen.setLoading(videos.length === 2 ? readyCount / videos.length * 100 : null);
+  startScreen.setLoading(videos.length > 0 ? readyCount / videos.length * 100 : null);
 }
 const readinessEvents = ['canplay', 'canplaythrough', 'loadeddata', 'progress', 'error'] as const;
 videos.forEach((video) => readinessEvents.forEach((event) => video.addEventListener(event, updateReadiness)));
