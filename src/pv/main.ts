@@ -24,7 +24,7 @@ const initial: AppState = {
   assignments: {},
   spanSourceId: null,
   playback: { playing: false, muted: false, seekRequest: null },
-  showPeople: true, // クライアントにスケール感を伝えるため表示(2026-07-29確定)
+  showPeople: false, // クライアント向けPVでは人物シルエットを出さない(2026-08-14変更)
 };
 
 const app = document.querySelector('#app')!;
