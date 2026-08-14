@@ -1,5 +1,6 @@
 export interface StartScreen {
   setLoading(pct: number | null): void;
+  show(): void;
   hide(): void;
   dispose(): void;
 }
@@ -36,6 +37,7 @@ export function createStartScreen(opts: {
 
   return {
     setLoading,
+    show() { overlay.hidden = false; },
     hide() { overlay.hidden = true; },
     dispose() {
       button.removeEventListener('click', onClick);

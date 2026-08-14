@@ -5,9 +5,9 @@ import { RoomView } from '../scene/room';
 import { createStore, initialState } from '../state/store';
 import type { AppState, MediaSource } from '../state/types';
 import { createViewControls } from '../ui/viewControls';
-import { setupXrControllers } from '../xr/controllers';
 import { setupXrSession } from '../xr/session';
 import { PV_INPUT_MODE, PV_SOURCES, USE_CROSSORIGIN } from './config';
+import { setupPvControllers } from './controllers';
 import { createStartScreen } from './startScreen';
 
 const initial: AppState = {
@@ -45,7 +45,6 @@ const room = new RoomView(roomAnchor, media);
 const environment = new EnvironmentView(roomAnchor, .7);
 const view = createViewControls(camera, renderer.domElement, store, -VIEWER_SETBACK_M);
 const disposeXr = setupXrSession(renderer, store, media, view.controls);
-const xrControllers = setupXrControllers(renderer, store, media);
 
 const allChanged = new Set(Object.keys(initial) as (keyof AppState)[]);
 media.applyState(initial);
@@ -103,6 +102,7 @@ startScreen = createStartScreen({
     startScreen.hide();
   },
 });
+const disposePvControllers = setupPvControllers(renderer, store, () => startScreen.show());
 
 function updateReadiness() {
   const readyCount = videos.filter((video) => video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA).length;
@@ -119,7 +119,6 @@ function resize() {
 }
 addEventListener('resize', resize);
 renderer.setAnimationLoop(() => {
-  xrControllers.update();
   view.controls.update();
   renderer.render(scene, camera);
 });
@@ -129,7 +128,7 @@ addEventListener('beforeunload', () => {
   videos.forEach((video) => readinessEvents.forEach((event) => video.removeEventListener(event, updateReadiness)));
   unsubscribe();
   startScreen.dispose();
-  xrControllers.dispose();
+  disposePvControllers();
   disposeXr();
   view.dispose();
   room.dispose();
