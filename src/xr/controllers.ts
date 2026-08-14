@@ -45,17 +45,8 @@ export function setupXrControllers(
 
   const onSelectStart = () => store.dispatch({ type: 'playback/toggle' });
 
-  const onSqueezeStart = (event: XrInputEvent) => {
-    const referenceSpace = renderer.xr.getReferenceSpace();
-    const pose = referenceSpace && event.frame?.getViewerPose(referenceSpace);
-    const RigidTransform = globalThis.XRRigidTransform;
-    if (!referenceSpace || !pose || typeof RigidTransform !== 'function') return;
-
-    const { x, z } = pose.transform.position;
-    renderer.xr.setReferenceSpace(referenceSpace.getOffsetReferenceSpace(
-      new RigidTransform({ x, y: 0, z }),
-    ));
-  };
+  /** グリップでVRセッションを終了する(位置リセットは廃止。PV版と同じ操作に揃える) */
+  const onSqueezeStart = () => { void renderer.xr.getSession()?.end().catch(() => undefined); };
 
   const detachSession = () => {
     if (!session) return;
@@ -80,7 +71,11 @@ export function setupXrControllers(
   return {
     update() {
       if (!session) return;
-      const exitPressed = [...session.inputSources].some((source) => source.gamepad?.buttons?.[5]?.pressed === true);
+      // 面ボタン(A/B/X/Y)のどれでも終了。機種によって index が 4/5 のどちらになるか揺れるため両方見る
+      const exitPressed = [...session.inputSources].some((source) => {
+        const buttons = source.gamepad?.buttons;
+        return buttons?.[4]?.pressed === true || buttons?.[5]?.pressed === true;
+      });
       if (!exitPressed) exitLatched = false;
       else if (!exitLatched) {
         exitLatched = true;
