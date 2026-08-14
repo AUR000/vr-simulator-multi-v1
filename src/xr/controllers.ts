@@ -4,7 +4,7 @@ import type { Store } from '../state/store';
 const STICK_THRESHOLD = 0.5;
 const SEEK_SECONDS = 10;
 
-interface XrGamepad { axes: readonly number[] }
+interface XrGamepad { axes: readonly number[]; buttons?: readonly { pressed: boolean }[] }
 interface XrInputSource { handedness: string; gamepad?: XrGamepad }
 interface XrReferenceSpace {
   getOffsetReferenceSpace(transform: unknown): XrReferenceSpace;
@@ -16,6 +16,7 @@ interface XrFrame {
 interface XrInputEvent extends Event { frame?: XrFrame }
 interface XrSession {
   inputSources: readonly XrInputSource[];
+  end(): Promise<void>;
   addEventListener(type: 'selectstart' | 'squeezestart', listener: (event: XrInputEvent) => void): void;
   removeEventListener(type: 'selectstart' | 'squeezestart', listener: (event: XrInputEvent) => void): void;
 }
@@ -40,6 +41,7 @@ export function setupXrControllers(
 ): XrControllerBindings {
   let session: XrSession | null = null;
   let stickLatched = false;
+  let exitLatched = false;
 
   const onSelectStart = () => store.dispatch({ type: 'playback/toggle' });
 
@@ -61,6 +63,7 @@ export function setupXrControllers(
     session.removeEventListener('squeezestart', onSqueezeStart);
     session = null;
     stickLatched = false;
+    exitLatched = false;
   };
 
   const onSessionStart = () => {
@@ -77,6 +80,13 @@ export function setupXrControllers(
   return {
     update() {
       if (!session) return;
+      const exitPressed = [...session.inputSources].some((source) => source.gamepad?.buttons?.[5]?.pressed === true);
+      if (!exitPressed) exitLatched = false;
+      else if (!exitLatched) {
+        exitLatched = true;
+        void renderer.xr.getSession()?.end().catch(() => undefined);
+      }
+
       const right = [...session.inputSources].find((source) => source.handedness === 'right' && source.gamepad);
       const axis = right?.gamepad?.axes[2];
       if (typeof axis !== 'number' || !Number.isFinite(axis)) return;

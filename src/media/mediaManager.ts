@@ -21,7 +21,7 @@ export interface MediaManager {
   getMaster(state: AppState): HTMLVideoElement | null; release(sourceId: string): void; dispose(): void;
 }
 
-type Entry = { source: MediaSource; video: HTMLVideoElement | null; texture: any };
+type Entry = { source: MediaSource; video: HTMLVideoElement | null; texture: any; onEnded?: () => void };
 
 export class DefaultMediaManager implements MediaManager {
   private entries = new Map<string, Entry>();
@@ -46,9 +46,16 @@ export class DefaultMediaManager implements MediaManager {
       this.entries.set(source.id, { source, video: null, texture }); return null;
     }
     const video = document.createElement('video'); video.src = source.url; video.loop = true; video.muted = true; video.playsInline = true; video.preload = 'auto';
+    const onEnded = () => {
+      const state = this.state;
+      if (!state?.playback.playing || !this.activeIds(state).has(source.id)) return;
+      try { video.currentTime = 0; } catch { /* metadata may not be ready */ }
+      void video.play().catch(() => undefined);
+    };
+    video.addEventListener('ended', onEnded);
     // anisotropy はレンダラ側の上限に自動クランプされる。斜めから見る面/ドーム周縁の4K素材の解像感に必須
     const texture = new VideoTexture(video); texture.colorSpace = SRGBColorSpace; texture.generateMipmaps = false; texture.minFilter = LinearFilter; texture.anisotropy = 16;
-    this.entries.set(source.id, { source, video, texture }); return video;
+    this.entries.set(source.id, { source, video, texture, onEnded }); return video;
   }
   get(id: string) { return this.entries.get(id)?.video ?? null; }
   getTexture(id: string) { return this.entries.get(id)?.texture ?? null; }
@@ -79,6 +86,6 @@ export class DefaultMediaManager implements MediaManager {
   }
   pickAudioSourceId(state: AppState) { return pickAudioSource(state); }
   getMaster(state: AppState) { const id = this.pickAudioSourceId(state); return id ? this.get(id) : null; }
-  release(id: string) { const entry = this.entries.get(id); if (!entry) return; if (entry.video) { entry.video.pause(); entry.video.removeAttribute('src'); entry.video.load(); } entry.texture.dispose(); this.images.delete(entry.source.url); if (entry.source.kind === 'file' && entry.source.url.startsWith('blob:')) URL.revokeObjectURL(entry.source.url); this.entries.delete(id); }
+  release(id: string) { const entry = this.entries.get(id); if (!entry) return; if (entry.video) { if (entry.onEnded) entry.video.removeEventListener('ended', entry.onEnded); entry.video.pause(); entry.video.removeAttribute('src'); entry.video.load(); } entry.texture.dispose(); this.images.delete(entry.source.url); if (entry.source.kind === 'file' && entry.source.url.startsWith('blob:')) URL.revokeObjectURL(entry.source.url); this.entries.delete(id); }
   dispose() { clearInterval(this.timer); [...this.entries.keys()].forEach((id) => this.release(id)); this.state = null; }
 }
