@@ -93,16 +93,26 @@ if (PV_INPUT_MODE === 'atlas') {
 const vrSupported = 'xr' in navigator;
 const xrEntryButton = document.querySelector<HTMLElement>('.xr-entry-button');
 let startScreen: ReturnType<typeof createStartScreen>;
+/** 体験を止めて先頭に戻す。次の人が必ず冒頭から見られるようにする */
+function resetPlayback() {
+  if (store.getState().playback.playing) store.dispatch({ type: 'playback/toggle' });
+  store.dispatch({ type: 'playback/restart' });
+  videos.forEach((video) => { video.pause(); try { video.currentTime = 0; } catch { /* metadata not ready */ } });
+}
+
 startScreen = createStartScreen({
   vrSupported,
   onStart: () => {
+    // 常に冒頭から始める(前の体験の続きにならないように)
+    videos.forEach((video) => { try { video.currentTime = 0; } catch { /* metadata not ready */ } });
+    store.dispatch({ type: 'playback/restart' });
     videos.forEach((video) => { void video.play().catch(() => undefined); });
     if (!store.getState().playback.playing) store.dispatch({ type: 'playback/toggle' });
     if (vrSupported) xrEntryButton?.click();
     startScreen.hide();
   },
 });
-const disposePvControllers = setupPvControllers(renderer, store, () => startScreen.show());
+const disposePvControllers = setupPvControllers(renderer, store, () => { resetPlayback(); startScreen.show(); });
 
 function updateReadiness() {
   const readyCount = videos.filter((video) => video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA).length;
