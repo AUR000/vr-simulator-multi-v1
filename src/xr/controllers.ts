@@ -41,7 +41,6 @@ export function setupXrControllers(
 ): XrControllerBindings {
   let session: XrSession | null = null;
   let stickLatched = false;
-  let exitLatched = false;
 
   const onSelectStart = () => store.dispatch({ type: 'playback/toggle' });
 
@@ -54,7 +53,6 @@ export function setupXrControllers(
     session.removeEventListener('squeezestart', onSqueezeStart);
     session = null;
     stickLatched = false;
-    exitLatched = false;
   };
 
   const onSessionStart = () => {
@@ -71,17 +69,6 @@ export function setupXrControllers(
   return {
     update() {
       if (!session) return;
-      // 面ボタン(A/B/X/Y)のどれでも終了。機種によって index が 4/5 のどちらになるか揺れるため両方見る
-      const exitPressed = [...session.inputSources].some((source) => {
-        const buttons = source.gamepad?.buttons;
-        return buttons?.[4]?.pressed === true || buttons?.[5]?.pressed === true;
-      });
-      if (!exitPressed) exitLatched = false;
-      else if (!exitLatched) {
-        exitLatched = true;
-        void renderer.xr.getSession()?.end().catch(() => undefined);
-      }
-
       const right = [...session.inputSources].find((source) => source.handedness === 'right' && source.gamepad);
       const axis = right?.gamepad?.axes[2];
       if (typeof axis !== 'number' || !Number.isFinite(axis)) return;
