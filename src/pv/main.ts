@@ -101,7 +101,7 @@ function resetPlayback() {
 }
 
 /** 開始ボタンを押してから映像が出るまでの暗転(被る時間を稼ぐ) */
-const START_DELAY_MS = 3000;
+const START_DELAY_MS = 5000;
 let startTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** 暗転: 部屋ごと隠して真っ黒にする(動画の1フレーム目も見せない) */
@@ -120,7 +120,7 @@ startScreen = createStartScreen({
     // 常に冒頭から始める(前の体験の続きにならないように)
     videos.forEach((video) => { try { video.currentTime = 0; } catch { /* metadata not ready */ } });
     store.dispatch({ type: 'playback/restart' });
-    // ユーザー操作の中で一度 play→pause しておくと、3秒後の再生が自動再生制限に引っかからない
+    // ユーザー操作の中で一度 play→pause しておくと、暗転後の再生が自動再生制限に引っかからない
     videos.forEach((video) => { void video.play().then(() => video.pause()).catch(() => undefined); });
     if (vrSupported) xrEntryButton?.click();
     startScreen.hide();
