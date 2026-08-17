@@ -100,19 +100,45 @@ function resetPlayback() {
   videos.forEach((video) => { video.pause(); try { video.currentTime = 0; } catch { /* metadata not ready */ } });
 }
 
+/** 開始ボタンを押してから映像が出るまでの暗転(被る時間を稼ぐ) */
+const START_DELAY_MS = 3000;
+let startTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** 暗転: 部屋ごと隠して真っ黒にする(動画の1フレーム目も見せない) */
+function setBlackout(on: boolean) {
+  roomAnchor.visible = !on;
+  renderer.setClearColor(on ? 0x000000 : 0x0a0e14);
+}
+
+function cancelStartTimer() { if (startTimer !== null) { clearTimeout(startTimer); startTimer = null; } }
+
 startScreen = createStartScreen({
   vrSupported,
   onStart: () => {
+    cancelStartTimer();
+    setBlackout(true);
     // 常に冒頭から始める(前の体験の続きにならないように)
     videos.forEach((video) => { try { video.currentTime = 0; } catch { /* metadata not ready */ } });
     store.dispatch({ type: 'playback/restart' });
-    videos.forEach((video) => { void video.play().catch(() => undefined); });
-    if (!store.getState().playback.playing) store.dispatch({ type: 'playback/toggle' });
+    // ユーザー操作の中で一度 play→pause しておくと、3秒後の再生が自動再生制限に引っかからない
+    videos.forEach((video) => { void video.play().then(() => video.pause()).catch(() => undefined); });
     if (vrSupported) xrEntryButton?.click();
     startScreen.hide();
+
+    startTimer = setTimeout(() => {
+      startTimer = null;
+      setBlackout(false);
+      videos.forEach((video) => { try { video.currentTime = 0; } catch { /* metadata not ready */ } void video.play().catch(() => undefined); });
+      if (!store.getState().playback.playing) store.dispatch({ type: 'playback/toggle' });
+    }, START_DELAY_MS);
   },
 });
-const disposePvControllers = setupPvControllers(renderer, store, () => { resetPlayback(); startScreen.show(); });
+const disposePvControllers = setupPvControllers(renderer, store, () => {
+  cancelStartTimer();
+  setBlackout(false);
+  resetPlayback();
+  startScreen.show();
+});
 
 function updateReadiness() {
   const readyCount = videos.filter((video) => video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA).length;
@@ -135,6 +161,7 @@ renderer.setAnimationLoop(() => {
 
 addEventListener('beforeunload', () => {
   renderer.setAnimationLoop(null);
+  cancelStartTimer();
   videos.forEach((video) => readinessEvents.forEach((event) => video.removeEventListener(event, updateReadiness)));
   unsubscribe();
   startScreen.dispose();
