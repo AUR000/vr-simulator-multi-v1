@@ -5,11 +5,11 @@ import type { DomeAction, DomeState } from './state';
 let sourceSequence = 0;
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}) { const node = document.createElement(tag); for (const [key, value] of Object.entries(attrs)) key === 'class' ? node.className = value : node.setAttribute(key, value); return node; }
 
-export function createPanel(host: HTMLElement, store: GenericStore<DomeState, DomeAction>, getVideo: () => HTMLVideoElement | null) {
+export function createPanel(host: HTMLElement, store: GenericStore<DomeState, DomeAction>, getVideo: () => HTMLVideoElement | null, preloadImage: (url: string) => Promise<void> = () => Promise.resolve()) {
   host.innerHTML = '<div class="row controls"></div><div class="row params"></div><div id="aspect-info">動画未選択</div>';
   const controls = host.querySelector('.controls')!, params = host.querySelector('.params')!;
   const fileLabel = element('label', { class: 'file-button' }); fileLabel.textContent = '動画選択';
-  const file = element('input', { type: 'file', accept: 'video/*' }); file.onchange = () => { const selected = file.files?.[0]; if (!selected) return; const source = { id: `dome-${++sourceSequence}`, kind: 'file' as const, url: URL.createObjectURL(selected), name: selected.name }; store.dispatch({ type: 'source/add', source }); store.dispatch({ type: 'source/select', sourceId: source.id }); }; fileLabel.append(file); controls.append(fileLabel);
+  const file = element('input', { type: 'file', accept: 'video/*,image/*' }); file.onchange = async () => { const selected = file.files?.[0]; if (!selected) return; const isImage = selected.type.startsWith('image/'); const url = URL.createObjectURL(selected); const source = { id: `dome-${++sourceSequence}`, kind: 'file' as const, url, name: selected.name, content: isImage ? 'image' as const : 'video' as const }; if (isImage) await preloadImage(url); store.dispatch({ type: 'source/add', source }); store.dispatch({ type: 'source/select', sourceId: source.id }); }; fileLabel.append(file); controls.append(fileLabel);
   const play = element('button'); play.onclick = () => store.dispatch({ type: 'playback/toggle' }); controls.append(play);
   const restart = element('button', { class: 'secondary' }); restart.textContent = '⏮ 先頭へ'; restart.onclick = () => store.dispatch({ type: 'playback/restart' }); controls.append(restart);
   const seek = element('input', { type: 'range', min: '0', max: '1000', value: '0', class: 'seek' }); seek.oninput = () => { const video = getVideo(); if (video?.duration) store.dispatch({ type: 'playback/seek', time: +seek.value / 1000 * video.duration }); }; controls.append(seek);

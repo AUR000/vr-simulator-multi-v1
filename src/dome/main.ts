@@ -57,7 +57,7 @@ function followViewParams(state: DomeState) {
 function updateGround(state: DomeState) { ground.visible = state.showGround; }
 const allChanged = new Set(Object.keys(initialState) as (keyof DomeState)[]); sphere.update(initialState, allChanged); applyMedia(initialState); updateView(initialState); updateGround(initialState);
 const unsubscribe = store.subscribe((state, changed) => { applyMedia(state); sphere.update(state, changed); if (changed.has('viewMode')) updateView(state); else if (changed.has('radiusM') || changed.has('centerHeightM')) followViewParams(state); if (changed.has('showGround')) updateGround(state); });
-const disposePanel = createPanel(document.querySelector('#ui')!, store, () => { const id = store.getState().sourceId; return id ? media.get(id) : null; });
+const disposePanel = createPanel(document.querySelector('#ui')!, store, () => { const id = store.getState().sourceId; return id ? media.get(id) : null; }, (url) => media.preloadImage(url));
 const disposeXrSession = setupXrSession(renderer, xrStore, media, controls);
 const xrControllers = setupXrControllers(renderer, xrStore, media);
 function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); } addEventListener('resize', resize);
